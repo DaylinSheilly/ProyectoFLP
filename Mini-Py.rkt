@@ -31,8 +31,8 @@
                         :=  * (primitiva-multi)
                         :=  concat (primitiva-concat)
     <primitiva-unaria> :=  longitud (primitiva-longitud)
-                       :=  add1 (primitiva-add1)
-                       :=  sub1 (primitiva-sub1)
+                       :=  sum1 (primitiva-sum1)
+                       :=  res1 (primitiva-res1)
 |#
 #|
     Tenga en cuenta que:
