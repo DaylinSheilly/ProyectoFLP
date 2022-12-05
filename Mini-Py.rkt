@@ -25,9 +25,9 @@
                 := <tupla>
                 tupla-exp (tupla)
                 := <registro>
-                regist-exp (regist)
+                registro-exp (registro)
                 := <expr-bool>
-                bool-exp (boolexp)
+                bool-exp (boolean-exp)
                 := "("<expression> <primitiva-para-numeros> <expression>")"
                 primapp-int-exp (exp1 prim-number exp2)
                 := <primitiva-sobre-cadenas> "("<expression>")"
@@ -137,7 +137,9 @@
     (expression (numero) numero-lit)
     (expression (texto) texto-lit)
     (expression (identificador) var-exp)
-    (expression (lista) lista-lit)
+    (expression (lista) list-exp)
+    (expression (tupla) tupla-exp)
+    (expression (registro) registro-exp)
     (expression (primitiva-sobre-cadenas "("expression")") primapp-str-exp)
     (expression ("("expression primitiva-para-numeros expression")") primapp-int-exp)
     (expression ("var""{"(separated-list identificador"="expression ",")"}") var-def-exp)
@@ -158,7 +160,29 @@
 
     (expression ("procedimiento" "(" (separated-list identificador ",") ")" "haga" expression "finProc" )procedimiento-exp)
     (expression ("evaluar" expression "("(separated-list expression "," ) ")" "finEval" ) app-exp)
-    (lista ("["(separated-list "{"expression"}" ";")"]") lista-lit)
+    
+    (lista ("["(separated-list "{"expression"}" ";")"]") list-exp)
+    (tupla ( "tupla" "[" separated-list "{" expression "}" ";" "]") tupla-exp)
+    (registro ("{" separated-list "{" identificador "}" ";" "}") registro-exp)
+
+    (expression (pred-prim separated-list "(" expression expression ")" ",") pred-prim-exp)
+    (expression (bool) expr-bool)
+    (expression (oper-bin-bool separated-list "(" expr-bool expr-bool ")" ",") oper-bin-bool-exp)
+
+    (pred-prim ("<") menorQue)
+    (pred-prim (">") mayorQue)
+    (pred-prim ("<=") menorOigualQue)
+    (pred-prim (">=") mayorOigualQue)
+    (pred-prim ("==") igual)
+    (pred-prim ("<>") diferente)
+
+    (bool ("true") verdadero)
+    (bool ("false") falso)
+
+    (oper-bin-bool ("and") y)
+    (oper-bin-bool ("or") o)
+
+    (oper-un-bool ("not") negacion)
    )
 )
 
@@ -271,7 +295,13 @@
                  (if (procval? proc)
                      (apply-procedure proc args)
                      (eopl:error 'eval-expression
-                                 "Attempt to apply non-procedure ~s" proc)))))))
+                                 "Attempt to apply non-procedure ~s" proc))))
+      (list-exp)
+      (tupla-exp)
+      (registro-exp)
+      (pred-prim-exp)
+      (oper-bin-bool-exp)
+                                 )))
 
 ; funciones auxiliares para aplicar eval-expression a cada elemento de una
 ; lista de operandos (expresiones)
