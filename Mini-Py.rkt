@@ -71,9 +71,10 @@
     (expression (numero) numero-lit)
     (expression (texto) texto-lit)
     (expression (identificador) var-exp)
+    (expression (lista) lista-lit)
     (expression (primitiva-unaria "("expression")") primapp-un-exp)
-    (expression ("("expression primitiva-binaria expression")") primapp-bin-exp)
-    (expression ())
+    (expression ("("expression primitiva-para-numeros expression")") primapp-exp)
+    (expression ("var""{"(separated-list identificador"="expression ",")"}") var-def-exp)
 
     (primitiva-para-numeros ("add1") primitiva-add1)
     (primitiva-para-numeros ("sub1") primitiva-sub1)
@@ -91,6 +92,7 @@
 
     (expression ("procedimiento" "(" (separated-list identificador ",") ")" "haga" expression "finProc" )procedimiento-exp)
     (expression ("evaluar" expression "("(separated-list expression "," ) ")" "finEval" ) app-exp)
+    (lista ("["(separated-list "{"expression"}" ";")"]") lista-lit)
    )
 )
 
@@ -165,7 +167,7 @@
   (lambda (pgm)
     (cases program pgm
       (a-program (body)
-                 (eval-expression body (init-env))))))
+                 (eval-expresion body (init-env))))))
 
 (define init-env
   (lambda ()
