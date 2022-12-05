@@ -9,31 +9,101 @@
 |#
 #|
     La definición BNF para las expresiones del lenguaje:
-    <programa> :=  <expresion> 
+    <programa> :=  <expression> 
                un-programa (exp)
-    <expresion> := <numero>
+
+    <expression>:= <numero>
                 numero-lit (num)
-                := "\""<texto> "\""
-                texto-lit (txt)
+                := "'"<cadena>"'"
+                char-lit (char)
+                := <bool>
+                bool-lit (bool)
                 := <identificador>
-                var-exp (id)
-                := (<expresion> <primitiva-binaria> <expresion>)
-                primapp-bin-exp (exp1 prim-binaria exp2)
-                := <primitiva-unaria> (<expresion>)
-                primapp-un-exp (prim-unaria exp)
-                := "Si" <expresion> "entonces" <expresion> "sino" <expresion> "finSi"
+                id-exp (id)
+                := <lista>
+                list-expr (list)
+                := <tupla>
+                tupla-exp (tupla)
+                := <registro>
+                regist-exp (regist)
+                := <expr-bool>
+                bool-exp (boolexp)
+                := "("<expression> <primitiva-para-numeros> <expression>")"
+                primapp-int-exp (exp1 prim-number exp2)
+                := <primitiva-sobre-cadenas> "("<expression>")"
+                primapp-str-exp (prim-str exp)
+                := "var" "{" <identificador> "=" <expression> "}"*(",") "in" <expression>
+                var-def-exp (ids exps cuerpo)
+                := "const" "{" <identificador> "=" <expression> "}"*(",") "in" <expression>
+                const-def-exp (ids exps cuerpo)
+                := "rec" "{" <identificador> "(" "{"<identificador>"}"*(",") ")" "=" <expression> "}"*(",")
+                "in" <expresion>
+                rec-def-exp (funcs ids cuerpof cuerpo)
+                := "begin" "{"<expression>"}"+(";") "end"
+
+                := "if" <expr-bool> "then" <expression> "[" "else"   <expression> "]" "end"
                 condicional-exp(test-exp true-exp false-exp)
-                := "declarar" "(" <identificador> "=" <expresion> (";") ")" "{" <expresion> "}"
-                variableLocal-exp(ids exps cuerpo)
-    <primitiva-para-numeros> :=  + (primitiva-suma)
-                             :=  - (primitiva-resta)
-                             :=  * (primitiva-multi)
-                             :=  % (primitiva-mod)
-                             :=  / (primitiva-div)
-                             :=  add1 (primitiva-add1)
-                             :=  sub1 (primitiva-sub1)
-    <primitiva-sobre-cadenas> :=  longitud (primitiva-longitud)
-                              :=  concat (primitiva-concat)
+                := "while" <expr-bool> "do"
+
+                := "for" <identificador> "=" <expression> "(" "to" | "downto" ")" <expression> "do"
+
+                := "done"
+
+    <identificador> := <cadena> | "{" <cadena> | <numero> "}"
+                    id (char num)
+    <primitiva-para-numeros> :=  "+" (primitiva-suma)
+                             :=  "-" (primitiva-resta)
+                             :=  "*" (primitiva-multi)
+                             :=  "%" (primitiva-mod)
+                             :=  "/" (primitiva-div)
+                             :=  "add1" (primitiva-add1)
+                             :=  "sub1" (primitiva-sub1)
+
+    <primitiva-sobre-cadenas> :=  "longitud" (primitiva-longitud)
+                              :=  "concat" (primitiva-concat)
+
+    <lista> := "[" "{" <expression> "}"*(";") "]"
+            list-exp (elems)
+
+    <tupla> := "[" "{" <expression> "," <expression> "}"*(";") "]"
+            tup-exp (elems1, elems2)
+
+    <registro> := "{" "{" <identificador> "=" <expression> "}"+(";") "}"
+            reg-exp (ids exps)
+
+    <expr-bool> := <pred-prim> "(" <expression> <expression> ")"*(",")
+                := <oper-bin-bool> "("<expr-bool > <expr-bool>")"*(",")
+                := <bool>
+                := <oper-un-bool>"("<expr-bool>")"
+
+    <pred-prim> := "<" | ">" | "<=" | ">=" | "==" | "<>"
+
+    <oper-bin-bool> := "and" | "or"
+
+    <oper-un-bool> := "not"
+
+    <primitiva-sobre-listas> := "(" "vacio?" <lista> ")"
+                             := "(" "vacio" <lista> ")"
+                             := "(" "lista?" <lista> ")"
+                             := "(" "crear-lista" <lista> ")"
+                             := "(" "cabeza" <lista> ")"
+                             := "(" "cola" <lista> ")"
+                             := "(" <lista> "append" <lista> ")"
+                             := "ref-list" ;???
+                             := "set-list" ;???
+
+    <primitiva-sobre-tuplas> := "(" "vacio?" <tupla> ")"
+                             := "(" "vacio" <tupla> ")"
+                             := "(" "tupla?" <tupla> ")"
+                             := "(" "crear-tupla" <tupla> ")"
+                             := "(" "cabeza" <tupla> ")"
+                             := "(" "cola" <tupla> ")"
+                             := "ref-tupla" ;???
+                             
+    <primitiva-sobre-regis> := "(" "registro?" <tupla> ")"
+                            := "(" "crear-registro" <tupla> ")"
+                            := "ref-registro" ;???
+                            := "set-registro" ;???
 |#
 #|
     Tenga en cuenta que:
@@ -46,23 +116,19 @@
 ;Especificación Léxica
 
 (define scanner-spec-simple-interpreter
-'((white-sp
-   (whitespace) skip)
-  (comment
-    ("#"(arbno (not #\newline))) skip)
-  ;(texto
-   ("" (arbno (or letter digit whitespace)) "") string)
-   ("letter" (arbno (or letter digit "?"))) symbol)
-  ; enteros positivos y negativos
-  (numero 
-   (digit (arbno digit)) number)
-  (numero 
-   ("-" digit (arbno digit)) number)
-  ; flotantes positivos y negativos
-  (numero 
-   (digit (arbno digit) "." digit (arbno digit)) number)
-  (numero 
-   ("-" digit (arbno digit) "." digit (arbno digit)) number)))
+'((white-sp (whitespace) skip)
+  (comment ("#"(arbno (not #\newline))) skip)
+  ;texto
+  (("'" (arbno (or letter digit whitespace)) "'") string)
+  ("letter" (arbno (or letter digit "?")) symbol)
+  ;enteros positivos y negativos
+  (numero (digit (arbno digit)) number)
+  (numero ("-" digit (arbno digit)) number)
+  ;flotantes positivos y negativos
+  (numero (digit (arbno digit) "." digit (arbno digit)) number)
+  (numero ("-" digit (arbno digit) "." digit (arbno digit)) number)
+ )
+)
 
 ;Especificación Sintáctica (gramática)
 
@@ -72,8 +138,8 @@
     (expression (texto) texto-lit)
     (expression (identificador) var-exp)
     (expression (lista) lista-lit)
-    (expression (primitiva-unaria "("expression")") primapp-un-exp)
-    (expression ("("expression primitiva-para-numeros expression")") primapp-exp)
+    (expression (primitiva-sobre-cadenas "("expression")") primapp-str-exp)
+    (expression ("("expression primitiva-para-numeros expression")") primapp-int-exp)
     (expression ("var""{"(separated-list identificador"="expression ",")"}") var-def-exp)
 
     (primitiva-para-numeros ("add1") primitiva-add1)
