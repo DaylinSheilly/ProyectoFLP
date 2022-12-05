@@ -25,14 +25,15 @@
                 condicional-exp(test-exp true-exp false-exp)
                 := "declarar" "(" <identificador> "=" <expresion> (";") ")" "{" <expresion> "}"
                 variableLocal-exp(ids exps cuerpo)
-    <primitiva-binaria> :=  + (primitiva-suma)
-                        :=  ~ (primitiva-resta)
-                        :=  / (primitiva-div)
-                        :=  * (primitiva-multi)
-                        :=  concat (primitiva-concat)
-    <primitiva-unaria> :=  longitud (primitiva-longitud)
-                       :=  sum1 (primitiva-sum1)
-                       :=  res1 (primitiva-res1)
+    <primitiva-para-numeros> :=  + (primitiva-suma)
+                             :=  - (primitiva-resta)
+                             :=  * (primitiva-multi)
+                             :=  % (primitiva-mod)
+                             :=  / (primitiva-div)
+                             :=  add1 (primitiva-add1)
+                             :=  sub1 (primitiva-sub1)
+    <primitiva-sobre-cadenas> :=  longitud (primitiva-longitud)
+                              :=  concat (primitiva-concat)
 |#
 #|
     Tenga en cuenta que:
@@ -48,13 +49,10 @@
 '((white-sp
    (whitespace) skip)
   (comment
-    ("%"(arbno (not #\newline))) skip)
-  ;pregunta como colocar \ \ y letras y numeros al tiempo
-  (texto
-   ("\"" (arbno (or letter digit whitespace)) "\"") string)
-  ;pregunta solo debe ser valido un ? y cómo se haría
-  (identificador
-   ("@" (arbno (or letter digit "?"))) symbol)
+    ("#"(arbno (not #\newline))) skip)
+  ;(texto
+   ("" (arbno (or letter digit whitespace)) "") string)
+   ("letter" (arbno (or letter digit "?"))) symbol)
   ; enteros positivos y negativos
   (numero 
    (digit (arbno digit)) number)
@@ -75,16 +73,18 @@
     (expression (identificador) var-exp)
     (expression (primitiva-unaria "("expression")") primapp-un-exp)
     (expression ("("expression primitiva-binaria expression")") primapp-bin-exp)
+    (expression ())
+
+    (primitiva-para-numeros ("add1") primitiva-add1)
+    (primitiva-para-numeros ("sub1") primitiva-sub1)
+    (primitiva-para-numeros ("+") primitiva-suma)
+    (primitiva-para-numeros ("-") primitiva-resta)
+    (primitiva-para-numeros ("*") primitiva-multi)
+    (primitiva-para-numeros ("/") primitiva-div)
+    (primitiva-para-numeros ("%") primitiva-mod)
     
-    (primitiva-unaria ("longitud") primitiva-longitud)
-    (primitiva-unaria ("add1") primitiva-add1)
-    (primitiva-unaria ("sub1") primitiva-sub1)
-    
-    (primitiva-binaria ("+") primitiva-suma)
-    (primitiva-binaria ("~") primitiva-resta)
-    (primitiva-binaria ("*") primitiva-multi)
-    (primitiva-binaria ("/") primitiva-div)
-    (primitiva-binaria ("concat") primitiva-concat)
+    (primitiva-sobre-cadenas ("longitud") primitiva-longitud)
+    (primitiva-sobre-cadenas ("concat") primitiva-concat)
 
     (expression ("Si" expression "entonces" expression "sino" expression "finSI") condicional-exp)
     (expression ("declarar" "(" (arbno identificador "=" expression ";") ")" "{" expression "}") variableLocal-exp)
