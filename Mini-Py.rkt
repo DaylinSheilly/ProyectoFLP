@@ -146,6 +146,7 @@
     (expression ("procedimiento" "(" (separated-list identificador ",") ")" "haga" expression "finProc" )procedimiento-exp)
     (expression ("evaluar" expression "("(separated-list expression "," ) ")" "finEval" ) app-exp)
     
+<<<<<<< HEAD
     (lista ("["(separated-list "{"expression"}" ";")"]") lista-exp)
     (tupla ( "tupla" "[" (separated-list "{" expression "}" ";" )"]") tupl-exp)
     (registro ("{" (separated-list "{" identificador "=" expression "}" ";") "}") regist-exp)
@@ -153,6 +154,15 @@
     (expr-bool (pred-prim "(" expression "," expression ")") pred-prim-exp)
     (expr-bool (bool) expr-boolean)
     (expr-bool (oper-bin-bool "(" bool "," bool ")") oper-bin-bool-exp)
+=======
+    (lista ("["(separated-list "{"expression"}" ";")"]") list-exp)
+    (tupla ( "tupla" "[" separated-list "{" expression "}" ";" "]") tupla-exp)
+    (registro ("{" separated-list "{" identificador "}" ";" "}") registro-exp)
+
+    (expression (pred-prim separated-list "(" expression expression ")" ",") pred-prim-exp)
+    (expression (bool) expr-bool)
+    (expression (oper-bin-bool separated-list "(" expr-bool expr-bool ")" ",") oper-bin-bool-exp)
+>>>>>>> 7e50080c84267d57ce3348c62a8e4550a6cd77e3
 
     (pred-prim ("<") menorQue)
     (pred-prim (">") mayorQue)
@@ -168,6 +178,7 @@
     (oper-bin-bool ("or") o)
 
     (oper-un-bool ("not") negacion)
+<<<<<<< HEAD
 
     ;Procedimientos
     
@@ -180,6 +191,8 @@
     ;procedimiento recursivo
     (expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expresion)  "in" expresion)  proc-recursivo-exp)
  
+=======
+>>>>>>> 7e50080c84267d57ce3348c62a8e4550a6cd77e3
    )
 )
 
@@ -289,6 +302,7 @@
                      (apply-procedure proc args)
                      (eopl:error 'eval-expression
                                  "Attempt to apply non-procedure ~s" proc))))
+<<<<<<< HEAD
       (list-exp (lista) (eval-list lista))
       (tupla-exp (tupla) (eval-tupla tupla))
       (registro-exp (registro) (eval-registro registro))
@@ -310,6 +324,13 @@
       (proc-recursivo-exp (nombre-proc idfs bodys letrec-body)
                           (proc-rec-auxiliar nombre-proc idfs bodys letrec-body env))
      
+=======
+      (list-exp)
+      (tupla-exp)
+      (registro-exp)
+      (pred-prim-exp)
+      (oper-bin-bool-exp)
+>>>>>>> 7e50080c84267d57ce3348c62a8e4550a6cd77e3
                                  )))
 
 ; funciones auxiliares para aplicar eval-expression a cada elemento de una
