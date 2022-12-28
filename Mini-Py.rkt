@@ -125,20 +125,20 @@
     (expression (lista) list-exp)
     (expression (tupla) tupla-exp)
     (expression (registro) registro-exp)
-    (expression (primitiva-sobre-cadenas "("expression")") primapp-str-exp)
-    (expression ("("expression primitiva-para-numeros expression")") primapp-int-exp)
+    (expression (primitiva-unaria "("expression")") primapp-un-exp)
+    (expression ("("expression primitiva-binaria expression")") primapp-bin-exp)
     (expression ("var""{"(separated-list identificador"="expression ",")"}") var-def-exp)
 
-    (primitiva-para-numeros ("add1") primitiva-add1)
-    (primitiva-para-numeros ("sub1") primitiva-sub1)
-    (primitiva-para-numeros ("+") primitiva-suma)
-    (primitiva-para-numeros ("-") primitiva-resta)
-    (primitiva-para-numeros ("*") primitiva-multi)
-    (primitiva-para-numeros ("/") primitiva-div)
-    (primitiva-para-numeros ("%") primitiva-mod)
+    (primitiva-binaria ("+") primitiva-suma)
+    (primitiva-binaria ("-") primitiva-resta)
+    (primitiva-binaria ("*") primitiva-multi)
+    (primitiva-binaria ("/") primitiva-div)
+    (primitiva-binaria ("%") primitiva-mod)
+    (primitiva-binaria ("concat") primitiva-concat)
     
-    (primitiva-sobre-cadenas ("longitud") primitiva-longitud)
-    (primitiva-sobre-cadenas ("concat") primitiva-concat)
+    (primitiva-unaria ("longitud") primitiva-longitud)
+    (primitiva-unaria ("add1") primitiva-add1)
+    (primitiva-unaria ("sub1") primitiva-sub1)
 
     (expression ("Si" expression "entonces" expression "sino" expression "finSI") condicional-exp)
     (expression ("declarar" "(" (arbno identificador "=" expression ";") ")" "{" expression "}") variableLocal-exp)
@@ -271,6 +271,12 @@
       (numero-lit (num) num)
       (texto-lit (txt) txt)
       (var-exp (id) (buscar-variable env id)) ;por aqui entra
+      (list-exp (lista) (eval-list lista))
+      (tupla-exp (tupla) (eval-tupla tupla))
+      (registro-exp (registro) (eval-registro registro))
+      (primapp-un-exp (prim exp) (apply-un-primitive prim exp env))
+      (primapp-bin-exp (exp1 prim exp2) (apply-bin-primitive exp1 prim exp2 env))
+      (var-def-exp (ids exps) 0) ;FALTA
       (condicional-exp (test-exp true-exp false-exp)
                        (if(true-value? (eval-expression test-exp env))
                           (eval-expression true-exp env)
@@ -280,8 +286,6 @@
                (let ((args (eval-rands exps env)))
                  (eval-expression cuerpo
                                   (extend-env ids args env))))
-      (procedimiento-exp (ids cuerpo)
-                         (cerradura ids cuerpo env))
       (app-exp (rator rands)
                (let ((proc (eval-expression rator env))
                      (args (eval-rands rands env)))
@@ -289,10 +293,6 @@
                      (apply-procedure proc args)
                      (eopl:error 'eval-expression
                                  "Attempt to apply non-procedure ~s" proc))))
-      (list-exp (lista) (eval-list lista))
-      (tupla-exp (tupla) (eval-tupla tupla))
-      (registro-exp (registro) (eval-registro registro))
-
       ;procedimientos
       (procedimiento-exp (ids cuerpo)
                          (cerradura ids cuerpo env))
@@ -306,7 +306,6 @@
                                    (eopl:error 'eval-expression
                                                "No se puede aplicar el procedimiento para ~s" proc))
       ))
-
       (proc-recursivo-exp (nombre-proc idfs bodys letrec-body)
                           (proc-rec-auxiliar nombre-proc idfs bodys letrec-body env))
      
