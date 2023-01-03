@@ -143,7 +143,6 @@
     (expression ("Si" expression "entonces" expression "sino" expression "finSI") condicional-exp)
     (expression ("declarar" "(" (arbno identificador "=" expression ";") ")" "{" expression "}") variableLocal-exp)
 
-    (expression ("procedimiento" "(" (separated-list identificador ",") ")" "haga" expression "finProc" )procedimiento-exp)
     (expression ("evaluar" expression "("(separated-list expression "," ) ")" "finEval" ) app-exp)
     
     (lista ("["(separated-list "{"expression"}" ";")"]") lista-exp)
@@ -164,10 +163,22 @@
     (bool ("true") verdadero)
     (bool ("false") falso)
 
-    (oper-bin-bool ("and") y)
-    (oper-bin-bool ("or") o)
+    (oper-bin-bool ("and") and)
+    (oper-bin-bool ("or") or)
 
     (oper-un-bool ("not") negacion)
+
+    ;Procedimientos
+    
+    ;procedimiento
+    (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expression "finProc") procedimiento-exp)
+    
+    ;invocación del procedimiento
+    (expression ("invocar-proc" expression "(" (separated-list expression ",") ")") procedimiento-inv-exp)
+    
+    ;procedimiento recursivo
+    (expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expression)  "in" expression)  proc-recursivo-exp)
+ 
    )
 )
 
@@ -268,8 +279,6 @@
                (let ((args (eval-rands exps env)))
                  (eval-expression cuerpo
                                   (extend-env ids args env))))
-      (procedimiento-exp (ids cuerpo)
-                         (cerradura ids cuerpo env))
       (app-exp (rator rands)
                (let ((proc (eval-expression rator env))
                      (args (eval-rands rands env)))
@@ -280,36 +289,83 @@
       (list-exp (lista) (eval-list lista))
       (tupla-exp (tupla) (eval-tupla tupla))
       (registro-exp (registro) (eval-registro registro))
+
+      ;procedimientos
+      #|(procedimiento-exp (ids cuerpo)
+                         (cerradura ids cuerpo env))
+      (procedimiento-inv-exp (expr args env)
+                             (let (
+                                   (proc (eval-expression expr env))
+                                   (argumentos  (proc-inv-auxiliar args env))
+                                   )  
+                               (if (procval? proc)
+                                   (apply-procedure proc argumentos)
+                                   (eopl:error 'eval-expression
+                                               "No se puede aplicar el procedimiento para ~s" proc))
+      ))
+      (proc-recursivo-exp (nombre-proc idfs bodys letrec-body)
+                          (proc-rec-auxiliar nombre-proc idfs bodys letrec-body env))|#
      
                                  )))
 
-; funciones auxiliares para aplicar eval-expression a cada elemento de una
+; funciones auxiliares para aplicar eval-expression a cada elemento
 
+;funcion auxiliar para evaluar las listas
 (define eval-list
   (lambda (exp env)
     (cases expression exp
       (list-expr (lista) (eval-expression exp)))))
 
+;funcion auxiliar para evaluar los procedimientos
+(define proc-inv-auxiliar
+ (lambda (exprs env)
+  (cond
+   ((null? exprs) empty)
+   (else
+      (cons (eval-expression (car exprs) env) (implementacion-exp-listas (cdr exprs) env))
+   )))
+)
 
+;funcion auxiliar para implementar los procedimientos recursivos
+(define proc-rec-auxiliar
+  (lambda (nombre-proc idfs bodys letrec-body env)
+    (eval-expression letrec-body (extend-env-recursivo nombre-proc idfs bodys env))
+  )
+)
+
+;funcion auxiliar para evaluar una tupla 
 (define eval-tupla
   (lambda (exp env)
     (cases expression exp
       (tupla-exp (tupla) (eval-expression exp)))))
 
-
+;funcion auxiliar para evaluar un registro
 (define eval-registro
   (lambda (exp env)
     (cases expression exp
       (registro-exp (registro) (eval-expression exp)))))
 
+;funcion auxiliar para evaluar una expresion booleana
+(define aply-pred-prim
+  (lambda (pred-prim-expr expr1 exp2 env)
+    (cases pred-prim pred-prim-expr
+      (menorQue () (< (eval-expression exp1 env) (eval-expression exp2 env)))
+      (mayorQue () (> (eval-expression exp1 env) (eval-expression exp2 env)))
+      (menorOigualQue () (<= (eval-expression exp1 env) (eval-expression exp2 env)))
+      (mayorOigualQue () (>= (eval-expression exp1 env) (eval-expression exp2 env)))
+      (igual () (eq? (eval-expression exp1 env) (eval-expression exp2 env)))
+      (diferente)
+      )
+    )
+  )
 
-(define eval-expr-bool
+(define aply-bin-boolean
   (lambda (expr-bool env)
     (cases expression expr-bool
-      #|(primapp-un-exp (prim-unaria exp)
+      (oper-un-bool (negacion exp)
                       (apply-un-primitive prim-unaria exp env))
       (primapp-bin-bool (exp1 prim-binaria exp2)
-                       (apply-bin-primitive exp1 prim-binaria exp2 env))|#
+                       (apply-bin-primitive exp1 prim-binaria exp2 env))
       ;(pred-prim-exp)
       ;bool
       )))
@@ -425,6 +481,22 @@
                                  (list-ref vals pos)
                                  (buscar-variable env idn)))))))
 
+
+;funcion auxiliar que crea un ambiente extendido para los procedimientos recursivos.
+(define extend-env-recursivo
+  (lambda (nombre-proc idfs bodys env-viejo)
+    (let ((len (length nombre-proc)))
+      (let ((vec (make-vector len)))
+        (let ((env (extended-env-record (map (lambda (id) (mutable id))nombre-proc) vec env-viejo)))
+          (for-each
+            (lambda (pos ids body)
+              (vector-set! vec pos (closure ids body env))
+            )
+            (iota len) idfs bodys
+          )
+          env)))))
+
+
 ;****************************************************************************************
 ;Funciones Auxiliares
 
@@ -444,6 +516,8 @@
               (if (number? list-index-r)
                 (+ list-index-r 1)
                 #f))))))
+
+;se define un ambiente inicial
 
 (define inicial-env
   (lambda ()
