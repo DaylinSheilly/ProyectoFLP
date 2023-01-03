@@ -269,23 +269,34 @@
   (lambda (exp env)
     (cases expression exp
       (numero-lit (num) num)
+      
       (texto-lit (txt) txt)
+
       (var-exp (id) (buscar-variable env id)) ;por aqui entra
+
       (list-exp (lista) (eval-list lista))
+
       (tupla-exp (tupla) (eval-tupla tupla))
+
       (registro-exp (registro) (eval-registro registro))
+
       (primapp-un-exp (prim exp) (apply-un-primitive prim exp env))
+
       (primapp-bin-exp (exp1 prim exp2) (apply-bin-primitive exp1 prim exp2 env))
+
       (var-def-exp (ids exps) 0) ;FALTA
+
       (condicional-exp (test-exp true-exp false-exp)
                        (if(true-value? (eval-expression test-exp env))
                           (eval-expression true-exp env)
                           (eval-expression false-exp env)
                         ))
+
       (variableLocal-exp (ids exps cuerpo)
                (let ((args (eval-rands exps env)))
                  (eval-expression cuerpo
                                   (extend-env ids args env))))
+
       (app-exp (rator rands)
                (let ((proc (eval-expression rator env))
                      (args (eval-rands rands env)))
@@ -293,9 +304,11 @@
                      (apply-procedure proc args)
                      (eopl:error 'eval-expression
                                  "Attempt to apply non-procedure ~s" proc))))
+
       ;procedimientos
       (procedimiento-exp (ids cuerpo)
                          (cerradura ids cuerpo env))
+
       (procedimiento-inv-exp (expr args env)
                              (let (
                                    (proc (eval-expression expr env))
@@ -308,7 +321,6 @@
       ))
       (proc-recursivo-exp (nombre-proc idfs bodys letrec-body)
                           (proc-rec-auxiliar nombre-proc idfs bodys letrec-body env))
-     
                                  )))
 
 ; funciones auxiliares para aplicar eval-expression a cada elemento de una
