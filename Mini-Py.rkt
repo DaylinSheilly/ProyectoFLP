@@ -119,15 +119,60 @@
 
 (define grammar-simple-interpreter
   '((program (expression) a-program)
-    (expression (numero) numero-lit)
-    (expression (texto) texto-lit)
+    ;identificadores
     (expression (identificador) var-exp)
+    (identificador (letra) id) ;falta
+
+    ;definiciones
+    (expression ("var" "{" (arbno identificador"="expression ",")"}" "in" expression) var-def-exp)
+    (expression ("const" "{" (arbno identificador"="expression ",")"}" "in" expression) const-def-exp)
+    (expression ("rec" "{" (arbno identificador "(" "{" (arbno identificador ",") "}" ")" "="expression ",")"}" "in" expression) rec-def-exp)
+
+    ;datos
+    (expression (numero) numero-lit)
+    (expression ("*"texto"*") texto-lit)
+    (expression (bool) bool-exp)
+    (numero () num) ;falta
+    (texto () texto) ;falta
+    (bool ("true") verdadero)
+    (bool ("false") falso)
+
+    ;datos predefinidos
     (expression (lista) list-exp)
     (expression (tupla) tupla-exp)
     (expression (registro) registro-exp)
+    (expression (expr-bool) bool-exp)
+    (lista ("["(separated-list expression ";")"]") lista)
+    (tupla ( "tupla" "[" (separated-list expression ";" )"]") tupla)
+    (registro ("{" (separated-list "{" identificador "=" expression "}" ";") "}") registro)
+
+    (expr-bool ("(" expression pred-prim expression ")") pred-prim-exp)
+    (expr-bool ("(" expr-bool oper-bin-bool expr-bool ")") bin-bool-exp)
+    (expr-bool (bool) bool-lit)
+    (expr-bool (oper-un-bool "(" expr-bool ")") not-bool-lit)
+
+    (pred-prim ("<") menorQue)
+    (pred-prim (">") mayorQue)
+    (pred-prim ("<=") menorOigualQue)
+    (pred-prim (">=") mayorOigualQue)
+    (pred-prim ("==") igual)
+    (pred-prim ("<>") diferente)
+
+    (oper-bin-bool ("and") y)
+    (oper-bin-bool ("or") o)
+
+    (oper-un-bool ("not") negacion)
+
+    ;estructuras de control
+    (expression ("begin" {expression}(arbno ";" expression) "end") begin-exp) ;falta
+    (expression ("si" expr-bool "entonces" expression "sino" expression "finSI") condicional-exp)
+    (expression ("mientras" expr-bool "hacer" expression "fin") mientras-exp)
+    (expression ("declarar" "(" (arbno identificador "=" expression ";") ")" "{" expression "}") variableLocal-exp)
+    (expression ("for""(" identificador "=" expression "hasta" expression ")""hacer" expression "fin") for-exp) ;falta
+
+    ;primitivas
     (expression (primitiva-unaria "("expression")") primapp-un-exp)
     (expression ("("expression primitiva-binaria expression")") primapp-bin-exp)
-    (expression ("var""{"(separated-list identificador"="expression ",")"}") var-def-exp)
 
     (primitiva-binaria ("+") primitiva-suma)
     (primitiva-binaria ("-") primitiva-resta)
@@ -139,47 +184,16 @@
     (primitiva-unaria ("longitud") primitiva-longitud)
     (primitiva-unaria ("add1") primitiva-add1)
     (primitiva-unaria ("sub1") primitiva-sub1)
-
-    (expression ("Si" expression "entonces" expression "sino" expression "finSI") condicional-exp)
-    (expression ("declarar" "(" (arbno identificador "=" expression ";") ")" "{" expression "}") variableLocal-exp)
-
-    (expression ("procedimiento" "(" (separated-list identificador ",") ")" "haga" expression "finProc" )procedimiento-exp)
-    (expression ("evaluar" expression "("(separated-list expression "," ) ")" "finEval" ) app-exp)
     
-    (lista ("["(separated-list "{"expression"}" ";")"]") lista-exp)
-    (tupla ( "tupla" "[" (separated-list "{" expression "}" ";" )"]") tupl-exp)
-    (registro ("{" (separated-list "{" identificador "=" expression "}" ";") "}") regist-exp)
-
-    (expr-bool (pred-prim "(" expression "," expression ")") pred-prim-exp)
-    (expr-bool (bool) expr-boolean)
-    (expr-bool (oper-bin-bool "(" bool "," bool ")") oper-bin-bool-exp)
-
-    (pred-prim ("<") menorQue)
-    (pred-prim (">") mayorQue)
-    (pred-prim ("<=") menorOigualQue)
-    (pred-prim (">=") mayorOigualQue)
-    (pred-prim ("==") igual)
-    (pred-prim ("<>") diferente)
-
-    (bool ("true") verdadero)
-    (bool ("false") falso)
-
-    (oper-bin-bool ("and") y)
-    (oper-bin-bool ("or") o)
-
-    (oper-un-bool ("not") negacion)
+    ;hexadecimales
+    (expression ("("(separated-list numero " ")")") hexa-lit)
 
     ;Procedimientos
+    (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expresion "finProc") procedimiento-exp);procedimiento
     
-    ;procedimiento
-    (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expresion "finProc") procedimiento-exp)
+    (expression ("invocar-proc" expresion "(" (separated-list expresion ",") ")") procedimiento-inv-exp);invocación del procedimiento
     
-    ;invocación del procedimiento
-    (expression ("invocar-proc" expresion "(" (separated-list expresion ",") ")") procedimiento-inv-exp)
-    
-    ;procedimiento recursivo
-    (expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expresion)  "in" expresion)  proc-recursivo-exp)
- 
+    (expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expresion)  "in" expresion)  proc-recursivo-exp);procedimiento recursivo
    )
 )
 
@@ -270,6 +284,11 @@
     (cases expression exp
       (numero-lit (num) num)
       
+      (hexa-lit (hexa) (if(hexa? hexa)
+                          (hexa)
+                          ("No es un numero hexadecimal válido.")
+                        ))
+      
       (texto-lit (txt) txt)
 
       (var-exp (id) (buscar-variable env id)) ;por aqui entra
@@ -279,6 +298,8 @@
       (tupla-exp (tupla) (eval-tupla tupla))
 
       (registro-exp (registro) (eval-registro registro))
+
+      (bool-exp (bool) (eval-boolean bool))
 
       (primapp-un-exp (prim exp) (apply-un-primitive prim exp env))
 
@@ -359,17 +380,13 @@
     (cases expression exp
       (registro-exp (registro) (eval-expression exp)))))
 
-
-(define eval-expr-bool
-  (lambda (expr-bool env)
-    (cases expression expr-bool
-      #|(primapp-un-exp (prim-unaria exp)
-                      (apply-un-primitive prim-unaria exp env))
-      (primapp-bin-bool (exp1 prim-binaria exp2)
-                       (apply-bin-primitive exp1 prim-binaria exp2 env))|#
-      ;(pred-prim-exp)
-      ;bool
-      )))
+(define eval-boolean
+  (lambda (exp))
+    (cases bool exp
+      (verdadero () (#t))
+      (falso () (#f))
+    )
+)
 
 ; lista de operandos (expresiones)
 (define eval-rands
