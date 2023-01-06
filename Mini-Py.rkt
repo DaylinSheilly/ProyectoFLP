@@ -131,7 +131,7 @@
     ;datos
     (expression (numero) numero-lit)
     (expression ("*"texto"*") texto-lit)
-    (expression (bool) bool-exp)
+    (expression (bool) bool-lit)
     (numero () num) ;falta
     (texto () texto) ;falta
     (bool ("true") verdadero)
@@ -282,54 +282,64 @@
 (define eval-expression
   (lambda (exp env)
     (cases expression exp
-      (numero-lit (num) num)
-      
-      (hexa-lit (hexa) (if(hexa? hexa)
-                          (hexa)
-                          ("No es un numero hexadecimal válido.")
-                        ))
-      
-      (texto-lit (txt) txt)
-
+    ;identificadores
       (var-exp (id) (buscar-variable env id)) ;por aqui entra
 
-      (list-exp (lista) (eval-list lista))
+    ;definiciones
+      (var-def-exp (ids exps) 0) ;falta
+      (const-def-exp (ids exps) 0) ;falta
+      (rec-def-exp (ids exps) 0) ;falta
 
+    ;datos
+      (numero-lit (num) num)
+      (texto-lit (txt) txt)
+      (bool-lit (bool) (eval-boolean bool))
+      
+    ;datos predefinidos
+      (list-exp (lista) (eval-lista lista))
       (tupla-exp (tupla) (eval-tupla tupla))
-
       (registro-exp (registro) (eval-registro registro))
+      (bool-exp (exp) (eval-expr-bool exp))
 
-      (bool-exp (bool) (eval-boolean bool))
-
-      (primapp-un-exp (prim exp) (apply-un-primitive prim exp env))
-
-      (primapp-bin-exp (exp1 prim exp2) (apply-bin-primitive exp1 prim exp2 env))
-
-      (var-def-exp (ids exps) 0) ;FALTA
-
+    ;estructuras de control
+      (begin-exp (exp exps) 0) ;falta
       (condicional-exp (test-exp true-exp false-exp)
                        (if(true-value? (eval-expression test-exp env))
                           (eval-expression true-exp env)
                           (eval-expression false-exp env)
-                        ))
-
+                        )
+      )
+      (mientras-exp (exp-bool cuerpo) 0) ;falta
       (variableLocal-exp (ids exps cuerpo)
                (let ((args (eval-rands exps env)))
                  (eval-expression cuerpo
-                                  (extend-env ids args env))))
-
-      (app-exp (rator rands)
+                                  (extend-env ids args env)))
+      )
+      (for-exp (id valorInicial limite cuerpo) 0) ;falta
+      
+      #|(app-exp (rator rands)
                (let ((proc (eval-expression rator env))
                      (args (eval-rands rands env)))
                  (if (procval? proc)
                      (apply-procedure proc args)
                      (eopl:error 'eval-expression
-                                 "Attempt to apply non-procedure ~s" proc))))
+                                 "Attempt to apply non-procedure ~s" proc))))|#
+
+    ;primitivas
+      (primapp-un-exp (prim exp) (apply-un-primitive prim exp env))
+      (primapp-bin-exp (exp1 prim exp2) (apply-bin-primitive exp1 prim exp2 env))
+
+    ;hexadecimales
+      (hexa-lit (hexa) (if(hexa? hexa)
+                          (hexa)
+                          ("No es un numero hexadecimal válido.")
+                        )
+      )
 
       ;procedimientos
       (procedimiento-exp (ids cuerpo)
-                         (cerradura ids cuerpo env))
-
+                         (cerradura ids cuerpo env)
+      )
       (procedimiento-inv-exp (expr args env)
                              (let (
                                    (proc (eval-expression expr env))
@@ -339,10 +349,12 @@
                                    (apply-procedure proc argumentos)
                                    (eopl:error 'eval-expression
                                                "No se puede aplicar el procedimiento para ~s" proc))
-      ))
+                             )
+      )
       (proc-recursivo-exp (nombre-proc idfs bodys letrec-body)
                           (proc-rec-auxiliar nombre-proc idfs bodys letrec-body env))
-                                 )))
+                                 ))
+      )
 
 ; funciones auxiliares para aplicar eval-expression a cada elemento de una
 
