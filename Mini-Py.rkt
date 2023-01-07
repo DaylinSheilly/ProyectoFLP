@@ -197,6 +197,10 @@
 
     ;???
     ;(expression ("evaluar" expression "("(separated-list expression "," ) ")" "finEval" ) app-exp)
+    
+    ; Asignación
+    (expression ("begin" expression (arbno ";" expression) "end") begin-exp)
+    (expression ("set" identifier "=" expression) set-exp)
    )
 )
 
