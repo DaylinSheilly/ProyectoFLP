@@ -3,7 +3,7 @@
     Integrantes:
     César Alejandro Grijalba Zúñiga - 202110035
     Johan Sebastian Tombe - 202110051
-    Laura Murillas Andrade - 1944153
+    Laura Murillas Andrade - 201944153
     Juan Esteban Mazuera - 2043008
     Sheilly Ortega - 2040051
     Link del repositorio: https://github.com/DaylinSheilly/ProyectoFLP.git
@@ -39,11 +39,17 @@
                 := "rec" "{" <identificador> "(" "{"<identificador>"}"*(",") ")" "=" <expression> "}"*(",")
                 "in" <expresion>
                 rec-def-exp (funcs ids cuerpof cuerpo)
+                := "procedimiento" ("(" <identificador> ")"*(",")) <expression>
+                procedimiento-exp (ids cuerpo)
+                := "evaluar" <expression> "(" <expression> "," ")" "finEval"
+                evaluar (exp exps)
                 := "begin" "{"<expression>"}"+(";") "end"
                 := "if" <expr-bool> "then" <expression> "[" "else"   <expression> "]" "end"
                 condicional-exp(test-exp true-exp false-exp)
                 := "while" <expr-bool> "do"
                 := "for" <identificador> "=" <expression> "(" "to" | "downto" ")" <expression> "do"
+                := set <identificador> = <expresion>
+;;              set-exp (idSet expSet)
                 := "done"
     <identificador> := <cadena> | "{" <cadena> | <numero> "}"
                     id (char num)
@@ -143,9 +149,8 @@
     (expression ("Si" expression "entonces" expression "sino" expression "finSI") condicional-exp)
     (expression ("declarar" "(" (arbno identificador "=" expression ";") ")" "{" expression "}") variableLocal-exp)
 
-    (expression ("procedimiento" "(" (separated-list identificador ",") ")" "haga" expression "finProc" )procedimiento-exp)
     (expression ("evaluar" expression "("(separated-list expression "," ) ")" "finEval" ) app-exp)
-
+    (expresion ("set" identificador "=" expresion) set-exp)
     (lista ("["(separated-list "{"expression"}" ";")"]") lista-exp)
     (tupla ( "tupla" "[" (separated-list "{" expression "}" ";" )"]") tupl-exp)
     (registro ("{" (separated-list "{" identificador "=" expression "}" ";") "}") regist-exp)
@@ -169,16 +174,17 @@
 
     (oper-un-bool ("not") negacion)
 
-    ;Procedimientos
+    ;estructuras de control
+    (expression ("begin" {expression}(arbno ";" expression) "end") begin-exp) ;falta
 
     ;procedimiento
-    (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expresion "finProc") procedimiento-exp)
+    (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expression "finProc") procedimiento-exp)
 
     ;invocación del procedimiento
-    (expression ("invocar-proc" expresion "(" (separated-list expresion ",") ")") procedimiento-inv-exp)
+    ;(expression ("invocar-proc" expression "(" (separated-list expression ",") ")") procedimiento-inv-exp)
 
     ;procedimiento recursivo
-    (expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expresion)  "in" expresion)  proc-recursivo-exp)
+    ;(expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expression)  "in" expression)  proc-recursivo-exp)
 
    )
 )
@@ -263,6 +269,20 @@
      '(1 2 3 "hola" "FLP")
      (empty-env))))
 
+
+;Definición de targets y referencias
+
+(define-datatype target target?
+  (direct-target (expval expval?))
+  (indirect-target (ref ref-to-direct-target?)))
+
+;referencias
+(define-datatype reference reference?
+  (a-ref (position integer?)
+         (vec vector?)))
+
+
+
 ;eval-expression: <expression> <enviroment> -> numero
 ; evalua la expresión en el ambiente de entrada
 (define eval-expression
@@ -276,12 +296,16 @@
                           (eval-expression true-exp env)
                           (eval-expression false-exp env)
                         ))
+      (set-exp (id rhs-exp)
+               (begin-exp
+                 (primitive-setref!
+                  (apply-env-ref env id)
+                  (eval-expresion rhs-exp env))
+                 1))
       (variableLocal-exp (ids exps cuerpo)
                (let ((args (eval-rands exps env)))
                  (eval-expression cuerpo
                                   (extend-env ids args env))))
-      (procedimiento-exp (ids cuerpo)
-                         (cerradura ids cuerpo env))
       (app-exp (rator rands)
                (let ((proc (eval-expression rator env))
                      (args (eval-rands rands env)))
@@ -293,60 +317,67 @@
       (tupla-exp (tupla) (eval-tupla tupla))
       (registro-exp (registro) (eval-registro registro))
 
+      ;estructuras de control
+      (begin-exp (exp exps) 0) ;falta
+      (condicional-exp (test-exp true-exp false-exp)
+                       (if(true-value? (eval-expression test-exp env))
+                          (eval-expression true-exp env)
+                          (eval-expression false-exp env)
+                        )
+      )
+
       ;procedimientos
       (procedimiento-exp (ids cuerpo)
                          (cerradura ids cuerpo env))
-      (procedimiento-inv-exp (expr args env)
-                             (let (
-                                   (proc (eval-expression expr env))
-                                   (argumentos  (proc-inv-auxiliar args env))
-                                   )
-                               (if (procval? proc)
-                                   (apply-procedure proc argumentos)
-                                   (eopl:error 'eval-expression
-                                               "No se puede aplicar el procedimiento para ~s" proc))
-      ))
-
-      (proc-recursivo-exp (nombre-proc idfs bodys letrec-body)
-                          (proc-rec-auxiliar nombre-proc idfs bodys letrec-body env))
+      (else #t)
 
                                  )))
 
-; funciones auxiliares para aplicar eval-expression a cada elemento de una
+;Funciones auxiliares para aplicar eval-expression a cada elemento de una
 
 (define eval-list
   (lambda (exp env)
     (cases expression exp
-      (list-expr (lista) (eval-expression exp)))))
+      (list-exp (lista) (eval-expression exp))
+      (else #t))))
 
 
-;funcion auxiliar para evaluar los procedimientos
-(define proc-inv-auxiliar
- (lambda (exprs env)
-  (cond
-   ((null? exprs) empty)
-   (else
-      (cons (eval-expression (car exprs) env) (implementacion-exp-listas (cdr exprs) env))
-   )))
-)
 
-;funcion auxiliar para implementar los procedimientos recursivos
-(define proc-rec-auxiliar
-  (lambda (nombre-proc idfs bodys letrec-body env)
-    (eval-expression letrec-body (extend-env-recursivo nombre-proc idfs bodys env))
-  )
-)
+
+;Función que retorna una lista de los números desde 0 hasta end
+(define iota
+  (lambda (end)
+    (let
+        loop ((next 0))
+        (if (>= next end)
+            '()
+            (cons next (loop (+ 1 next)))))))
+
+;Función para procedimientos recursivos que crea un ambiente extendido
+(define extend-env-recursively
+  (lambda (proc-names idss bodies old-env)
+    (let ((len (length proc-names)))
+      (let ((vec (make-vector len)))
+        (let ((env (extended-env-record proc-names vec old-env)))
+          (for-each
+            (lambda (pos ids body)
+              (vector-set! vec pos (direct-target (cerradura ids body env))))
+            (iota len) idss bodies)
+          env)))))
+
 
 (define eval-tupla
   (lambda (exp env)
     (cases expression exp
-      (tupla-exp (tupla) (eval-expression exp)))))
+      (tupla-exp (tupla) (eval-expression exp))
+      (else #t))))
 
 
 (define eval-registro
   (lambda (exp env)
     (cases expression exp
-      (registro-exp (registro) (eval-expression exp)))))
+      (registro-exp (registro) (eval-expression exp))
+      (else #t))))
 
 
 (define eval-expr-bool
@@ -355,9 +386,11 @@
       #|(primapp-un-exp (prim-unaria exp)
                       (apply-un-primitive prim-unaria exp env))
       (primapp-bin-bool (exp1 prim-binaria exp2)
-                       (apply-bin-primitive exp1 prim-binaria exp2 env))|#
-      ;(pred-prim-exp)
-      ;bool
+                       (apply-bin-primitive exp1 prim-binaria exp2 env))
+      (pred-prim-exp)
+      bool
+      |#
+      (else #t)
       )))
 
 ; lista de operandos (expresiones)
@@ -367,7 +400,36 @@
 
 (define eval-rand
   (lambda (rand env)
-    (eval-expression rand env)))
+    ;(eval-expression rand env)
+    (cases expression rand
+      (lista (exp)
+             (indirect-target
+              (let((ref (apply-env-ref env exp)))
+                (cases target (primitive-deref ref)
+                  (direct-target (expval) ref)
+                  (indirect-target (ref-1) ref-1)
+                  )
+                )
+              )
+      )
+      (else
+        (direct-target (eval-expression rand env)))
+      )))
+
+
+(define eval-primapp-exp-rands
+  (lambda (rands env)
+    (map (lambda (x) (eval-expression x env)) rands)))
+
+(define eval-let-exp-rands
+  (lambda (rands env)
+    (map (lambda (x) (eval-let-exp-rand x env))
+         rands)))
+
+(define eval-let-exp-rand
+  (lambda (rand env)
+    (direct-target (eval-expression rand env))))
+
 
 ;apply-un-primitive: <primitiva-unaria> (<expression>) -> numero
 (define apply-un-primitive
@@ -415,6 +477,7 @@
 (define true-value?
   (lambda (x)
     (not (zero? x))))
+
 
 ;************************************************************************************************
 ;Procedimientos
@@ -471,6 +534,17 @@
                                  (list-ref vals pos)
                                  (buscar-variable env idn)))))))
 
+(define apply-env-ref
+  (lambda (env sym)
+    (cases environment env
+      (empty-env-record ()
+                        (eopl:error 'apply-env-ref "No binding for ~s" sym))
+      (extended-env-record (syms vals env)
+                           (let ((pos (rib-find-position sym syms)))
+                             (if (number? pos)
+                                 (a-ref pos vals)
+                                 (apply-env-ref env sym)))))))
+
 
 ;funcion auxiliar que crea un ambiente extendido para los procedimientos recursivos.
 (define extend-env-recursivo
@@ -512,3 +586,64 @@
 (define inicial-env
   (lambda ()
     (extend-env '(@a @b @c @d @e) '(1 2 3 "hola" "FLP") (empty-env))))
+
+
+
+;****************************************************************************************
+
+
+;Targets y referencias
+(define expval?
+  (lambda (x)
+    (or (or (number? x) (procval? x) ) list? x)
+  )
+)
+
+
+(define ref-to-direct-target?
+  (lambda (x)
+    (and (reference? x)
+         (cases reference x
+           (a-ref (pos vec)
+                  (cases target (vector-ref vec pos)
+                    (direct-target (v) #t)
+                    (indirect-target (v) #f)))))))
+
+(define primitive-deref
+  (lambda (ref)
+    (cases reference ref
+      (a-ref (pos vec)
+             (vector-ref vec pos)))))
+
+;funcion deref
+(define deref
+  (lambda (ref)
+    (cases target (primitive-deref ref)
+      (direct-target (expval) expval)
+      (indirect-target (ref-1)
+                       (cases target (primitive-deref ref-1)
+                         (direct-target (expval) expval)
+                         (indirect-target (p)
+                                          (eopl:error 'deref
+                                                      "Illegal reference: ~s" ref-1)))))))
+
+
+(define primitive-setref!
+  (lambda (ref val)
+    (cases reference ref
+      (a-ref (pos vec)
+             (vector-set! vec pos val)))))
+
+;funcion setref!
+(define setref!
+  (lambda (ref expval)
+    (let
+        ((ref (cases target (primitive-deref ref)
+                (direct-target (expval1) ref)
+                (indirect-target (ref-1) ref-1))))
+      (primitive-setref! ref (direct-target expval))
+    )
+  )
+)
+
+
