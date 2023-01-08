@@ -246,57 +246,6 @@
   (lambda () (sllgen:list-define-datatypes scanner-spec-simple-interpreter grammar-simple-interpreter)))
 
 
-;Función para buscar dentro un ambiente (referencia)
-(define apply-env
-  (lambda (env var)
-    (deref (apply-env-ref env var))))
-
-;Funcion para retornar una referencia (implicita)
-(define apply-env-ref
-  (lambda (env var)
-    (cases ambiente env
-      (ambiente-vacio () (eopl:error "No se encuentra la ligadura " var))
-      (ambiente-extendido
-       (lid lval old-env)
-       (letrec
-           (
-            (buscar-id
-             (lambda (lidd lvall varr pos)
-               (cond
-                 [(null? lidd) (apply-env-ref old-env varr)]
-                 [(eqv? (car lidd) varr) (a-ref pos lvall)] ;;Ya no retorno el valor si no la referencia
-                 [else (buscar-id (cdr lidd) lvall varr (+ pos 1))])))
-            )
-         (buscar-id lid lval var 0)))
-      (ambiente-extendido-recursivo
-       (proc-names llargs bodies env-old)
-       (letrec
-           (
-            (buscar-proc
-             (lambda (proc-names llargs bodies)
-               (cond
-                 [(null? proc-names)
-                  (apply-env-ref env-old var)]
-                 [(eqv?
-                   (car proc-names)
-                   var)
-                  (a-ref
-                   0
-                   (list->vector 
-                    (list(cerradura
-                    (car llargs)
-                    (car bodies)
-                    env)))) ;Aqui generamos la clausura
-                  ]
-                 [else
-                  (buscar-proc (cdr proc-names)
-                               (cdr llargs)
-                               (cdr bodies))])))
-            )
-         (buscar-proc proc-names llargs bodies)))
-      )
-    )
-  )
 
 
 
