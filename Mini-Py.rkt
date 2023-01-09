@@ -121,7 +121,7 @@
   '((program (expression) a-program)
     ;identificadores
     (expression (identificador) var-exp)
-    (identificador (letra) id) ;falta
+    (identificador (texto) id-lit) ;falta
 
     ;definiciones
     (expression ("var" "{" (arbno identificador"="expression ",")"}" "in" expression) var-def-exp)
@@ -131,9 +131,8 @@
     ;datos
     (expression (numero) numero-lit)
     (expression ("*"texto"*") texto-lit)
-    (expression (bool) bool-lit)
+    (expression (bool) bool-lit-exp)
     (numero () num) ;falta
-    (texto () texto) ;falta
     (bool ("true") verdadero)
     (bool ("false") falso)
 
@@ -142,9 +141,10 @@
     (expression (tupla) tupla-exp)
     (expression (registro) registro-exp)
     (expression (expr-bool) bool-exp)
-    (lista ("["(separated-list expression ";")"]") lista)
-    (tupla ( "tupla" "[" (separated-list expression ";" )"]") tupla)
-    (registro ("{" (separated-list "{" identificador "=" expression "}" ";") "}") registro)
+
+    (lista ("["(separated-list expression ";")"]") list)
+    (tupla ( "tupla" "[" (separated-list expression ";" )"]") tupl)
+    (registro ("{" (separated-list "{" identificador "=" expression "}" ";") "}") registr)
 
     (expr-bool ("(" expression pred-prim expression ")") pred-prim-exp)
     (expr-bool ("(" expr-bool oper-bin-bool expr-bool ")") bin-bool-exp)
@@ -164,7 +164,7 @@
     (oper-un-bool ("not") negacion)
 
     ;estructuras de control
-    (expression ("begin" {expression}(arbno ";" expression) "end") begin-exp) ;falta
+    (expression ("begin" "{"expression"}" ";" (arbno expression ";") "end") begin-exp) ;falta
     (expression ("si" expr-bool "entonces" expression "sino" expression "finSI") condicional-exp)
     (expression ("mientras" expr-bool "hacer" expression "fin") mientras-exp)
     (expression ("declarar" "(" (arbno identificador "=" expression ";") ")" "{" expression "}") variableLocal-exp)
@@ -189,12 +189,15 @@
     (expression ("("(separated-list numero " ")")") hexa-lit)
 
     ;Procedimientos
-    (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expresion "finProc") procedimiento-exp);procedimiento
+    (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expression "finProc") procedimiento-exp);procedimiento
     
-    (expression ("invocar-proc" expresion "(" (separated-list expresion ",") ")") procedimiento-inv-exp);invocación del procedimiento
+    (expression ("invocar-proc" expression "(" (separated-list expression ",") ")") procedimiento-inv-exp);invocación del procedimiento
     
-    (expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expresion)  "in" expresion)  proc-recursivo-exp);procedimiento recursivo
-   )
+    (expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expression)  "in" expression)  proc-recursivo-exp);procedimiento recursivo
+
+    
+    (expression ("evaluar" expression "("(separated-list expression "," ) ")" "finEval" ) app-exp)
+    )
 )
 
 ;Tipos de datos para la sintaxis abstracta de la gramática
@@ -296,34 +299,37 @@
       (bool-lit (bool) (eval-boolean bool))
       
     ;datos predefinidos
-      (list-exp (lista) (eval-lista lista))
+      (list-exp (lista) (eval-lista lista env))
       (tupla-exp (tupla) (eval-tupla tupla))
       (registro-exp (registro) (eval-registro registro))
       (bool-exp (exp) (eval-expr-bool exp))
 
     ;estructuras de control
-      (begin-exp (exp exps) 0) ;falta
+      (begin-exp (exp exps) (if(null? exps)
+                               (eval-expression exp env)
+                               (begin (cons exp exps) (begin-func exps env))
+      ) ;falta
       (condicional-exp (test-exp true-exp false-exp)
                        (if(true-value? (eval-expression test-exp env))
                           (eval-expression true-exp env)
                           (eval-expression false-exp env)
                         )
       )
-      (mientras-exp (exp-bool cuerpo) 0) ;falta
+      (mientras-exp (exp-bool cuerpo) (while-loop (eval-expression exp-bool env) cuerpo env))
       (variableLocal-exp (ids exps cuerpo)
                (let ((args (eval-rands exps env)))
                  (eval-expression cuerpo
                                   (extend-env ids args env)))
       )
-      (for-exp (id valorInicial limite cuerpo) 0) ;falta
+      (for-exp (id valorInicial limite cuerpo) (for-loop (eval-expression valorInicial env) (eval-expression limite env) cuerpo env))
       
-      #|(app-exp (rator rands)
+      (app-exp (rator rands)
                (let ((proc (eval-expression rator env))
                      (args (eval-rands rands env)))
                  (if (procval? proc)
                      (apply-procedure proc args)
                      (eopl:error 'eval-expression
-                                 "Attempt to apply non-procedure ~s" proc))))|#
+                                 "Attempt to apply non-procedure ~s" proc))))
 
     ;primitivas
       (primapp-un-exp (prim exp) (apply-un-primitive prim exp env))
@@ -353,16 +359,33 @@
       )
       (proc-recursivo-exp (nombre-proc idfs bodys letrec-body)
                           (proc-rec-auxiliar nombre-proc idfs bodys letrec-body env))
-                                 ))
-      )
+        )
+    )
+))
+
+
+(define (begin-func exps env)
+  (apply begin (map eval-expression exps env)))
+
+
+(define (while-loop eval cuerpo env)
+  (cond (eval
+          (begin
+            (eval-expression cuerpo env)
+            (while-loop eval cuerpo env)))
+        (else #f)))
+
+(define (for-loop valorInicial limite cuerpo env)
+  (let loop ((i valorInicial))
+    (cond
+      ((>= i limite) #f)
+      (else (begin
+            (eval-expression cuerpo env)
+            (loop (+ i 1)))))))
+
+
 
 ; funciones auxiliares para aplicar eval-expression a cada elemento de una
-
-(define eval-list
-  (lambda (exp env)
-    (cases expression exp
-      (list-expr (lista) (eval-expression exp)))))
-
 
 ;funcion auxiliar para evaluar los procedimientos
 (define proc-inv-auxiliar
@@ -379,25 +402,6 @@
   (lambda (nombre-proc idfs bodys letrec-body env)
     (eval-expression letrec-body (extend-env-recursivo nombre-proc idfs bodys env))
   )
-)
-
-(define eval-tupla
-  (lambda (exp env)
-    (cases expression exp
-      (tupla-exp (tupla) (eval-expression exp)))))
-
-
-(define eval-registro
-  (lambda (exp env)
-    (cases expression exp
-      (registro-exp (registro) (eval-expression exp)))))
-
-(define eval-boolean
-  (lambda (exp))
-    (cases bool exp
-      (verdadero () (#t))
-      (falso () (#f))
-    )
 )
 
 ; lista de operandos (expresiones)
