@@ -44,6 +44,8 @@
                 condicional-exp(test-exp true-exp false-exp)
                 := "while" <expr-bool> "do"
                 := "for" <identificador> "=" <expression> "(" "to" | "downto" ")" <expression> "do"
+                := set <identificador> = <expresion>
+;;              set-exp (idSet expSet)
                 := "done"
     <identificador> := <cadena> | "{" <cadena> | <numero> "}"
                     id (char num)
@@ -86,17 +88,10 @@
                              := "(" "cola" <tupla> ")"
                              := "ref-tupla" ;???
                              
-    <primitiva-sobre-regis> := "(" "registro?" <tupla> ")"
+    <primitiva-sobre-registro> := "(" "registro?" <tupla> ")"
                             := "(" "crear-registro" <tupla> ")"
                             := "ref-registro" ;???
                             := "set-registro" ;???
-|#
-#|
-    Tenga en cuenta que:
-    <numero>: Debe definirse para valores decimales y enteros (positivos y negativos)
-    <texto>: Debe definirse para cualquier texto escrito en racket
-    <identificador>: En este lenguaje todo identificador iniciará con el símbolo  @, es decir las
-                     variables @x y @z son válidas
 |#
 
 ;Especificación Léxica
@@ -129,6 +124,7 @@
     (expression (bool) bool-lit-exp)
     (bool ("true") verdadero)
     (bool ("false") falso)
+    (expr-bool (bool) bool-lit)
 
     ;datos predefinidos
     (expression (lista) list-exp)
@@ -149,14 +145,12 @@
     (pred-prim ("==") igual)
     (pred-prim ("<>") diferente)
     
-    (expr-bool ("(" expr-bool oper-bin-bool expr-bool ")") bin-bool-exp)
-    (oper-bin-bool ("and") y)
-    (oper-bin-bool ("or") o)
-    
-    (expr-bool (bool) bool-lit)
+    (expr-bool (oper-bin-bool "(" expr-bool expr-bool ")") bin-bool-exp)
+    (oper-bin-bool ("and") boolAnd)
+    (oper-bin-bool ("or") boolOr)
     
     (expr-bool (oper-un-bool "(" expr-bool ")") not-bool-lit)
-    (oper-un-bool ("not") negacion)
+    (oper-un-bool ("not") boolNot)
     
     ;estructuras de control
     (expression ("begin" "{"expression"}" ";" (arbno expression ";") "end") begin-exp) ;falta
@@ -166,7 +160,7 @@
     (expression ("for""(" identificador "=" expression "hasta" expression ")""hacer" expression "fin") for-exp) ;falta
 
     ;primitivas
-    (expression (primitiva-unaria "("expression")") primapp-un-exp)
+     #|(expression (primitiva-unaria "("expression")") primapp-un-exp)
     (expression ("("expression primitiva-binaria expression")") primapp-bin-exp)
 
     (primitiva-binaria ("+") primitiva-suma)
@@ -181,8 +175,10 @@
     (primitiva-unaria ("sub1") primitiva-sub1)
     
     ;hexadecimales
-    (expression ("("(separated-list numero " ")")") hexa-lit)
+    (expression ("("(separated-list numero " ")")") hexa-lit)|#
 
+    (expresion ("set" identificador "=" expresion) set-exp)
+    
     ;Procedimientos
     (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expression "finProc") procedimiento-exp);procedimiento
     
@@ -239,6 +235,17 @@
      '(1 2 3 "hola" "FLP")
      (empty-env))))
 
+;Definición de targets y referencias
+
+(define-datatype target target?
+  (direct-target (expval expval?))
+  (indirect-target (ref ref-to-direct-target?)))
+
+;referencias
+(define-datatype reference reference?
+  (a-ref (position integer?)
+         (vec vector?)))
+
 ;eval-expression: <expression> <enviroment> -> numero
 ; evalua la expresión en el ambiente de entrada
 (define eval-expression
@@ -255,13 +262,30 @@
     ;datos
       (numero-lit (num) num)
       (texto-lit (txt) txt)
-      (bool-lit (bool) (eval-boolean bool))
+      (bool-lit-exp (bool) (eval-boolean bool))
       
     ;datos predefinidos
       (list-exp (lista) (eval-lista lista env))
       (tupla-exp (tupla) (eval-tupla tupla))
       (registro-exp (registro) (eval-registro registro))
-      (bool-exp (exp) (eval-expr-bool exp))
+      (bool-exp (exp) (eval-expr-bool exp)
+                (cases expr-bool exp
+                  (pred-prim-exp (exp-bool1 pred-prim exp-bool2)
+                                 (apply-pred-prim pred-prim exp-bool1 exp-bool2 env))
+                  (bin-bool-exp (exp-bool1 oper-bin-bool exp-bool2)
+                                (apply-oper-bin-bool oper-bin-bool exp-bool1 exp-bool2 env))
+                  (bool-lit (exp-bool) (eval-expression exp-bool env))
+                  (not-bool-lit (oper-un-bool exp-bool)
+                                (apply-un-bool oper-un-bool exp-bool env))
+                 )
+      )
+
+      (set-exp (id rhs-exp)
+               (begin-exp
+                 (primitive-setref!
+                  (apply-env-ref env id)
+                  (eval-expresion rhs-exp env))
+                 1))
 
     ;estructuras de control
       (begin-exp (exp exps) (if(null? exps)
@@ -363,7 +387,7 @@
 
 ;funcion auxiliar para evaluar una expresion pred-prim
 (define apply-pred-prim
-  (lambda (pred-prim-expr expr1 exp2 env)
+  (lambda (expr1 pred-prim-expr exp2 env)
     (cases pred-prim pred-prim-expr
       (menorQue () (< (eval-expression exp1 env) (eval-expression exp2 env)))
       (mayorQue () (> (eval-expression exp1 env) (eval-expression exp2 env)))
@@ -372,8 +396,8 @@
       (igual () (= (eval-expression exp1 env) (eval-expression exp2 env)))
       (diferente () (inexact-= (eval-expression exp1 env)))
       )
-    )
-  )
+   )
+ )
 
 ;funcion auxiliar para evaluar una expresion oper-bin-bool
 (define apply-oper-bin-bool
@@ -397,12 +421,33 @@
 ;funcion auxiliar para evaluar una expresion bool
 (define eval-boolean
   (lambda (bool-expr)
-    (cases bool bool-exp
-      (verdadero () (#t))
-      (falso () (#f))
+    (cases bool-expr
+      ((verdadero) #t)
+      ((falso) #f)
     )
   )
 )
+
+;Función que retorna una lista de los números desde 0 hasta end
+(define iota
+  (lambda (end)
+    (let
+        loop ((next 0))
+        (if (>= next end)
+            '()
+            (cons next (loop (+ 1 next)))))))
+
+;Función para procedimientos recursivos que crea un ambiente extendido
+(define extend-env-recursively
+  (lambda (proc-names idss bodies old-env)
+    (let ((len (length proc-names)))
+      (let ((vec (make-vector len)))
+        (let ((env (extended-env-record proc-names vec old-env)))
+          (for-each
+            (lambda (pos ids body)
+              (vector-set! vec pos (direct-target (cerradura ids body env))))
+            (iota len) idss bodies)
+          env)))))
 
 ; lista de operandos (expresiones)
 (define eval-rands
@@ -411,7 +456,35 @@
 
 (define eval-rand
   (lambda (rand env)
-    (eval-expression rand env)))
+    ;(eval-expression rand env)
+    (cases expression rand
+      (lista (exp)
+             (indirect-target
+              (let((ref (apply-env-ref env exp)))
+                (cases target (primitive-deref ref)
+                  (direct-target (expval) ref)
+                  (indirect-target (ref-1) ref-1)
+                  )
+                )
+              )
+      )
+      (else
+        (direct-target (eval-expression rand env)))
+      )))
+
+
+(define eval-primapp-exp-rands
+  (lambda (rands env)
+    (map (lambda (x) (eval-expression x env)) rands)))
+
+(define eval-let-exp-rands
+  (lambda (rands env)
+    (map (lambda (x) (eval-let-exp-rand x env))
+         rands)))
+
+(define eval-let-exp-rand
+  (lambda (rand env)
+    (direct-target (eval-expression rand env))))
 
 ;medir-texto: <string> -> <number>
 (define medir-texto
@@ -454,6 +527,16 @@
       (cerradura (ids cuerpo env)
                (eval-expression cuerpo (extend-env ids args env))))))
 
+(define apply-env-ref
+  (lambda (env sym)
+    (cases environment env
+      (empty-env-record ()
+                        (eopl:error 'apply-env-ref "No binding for ~s" sym))
+      (extended-env-record (syms vals env)
+                           (let ((pos (rib-find-position sym syms)))
+                             (if (number? pos)
+                                 (a-ref pos vals)
+                                 (apply-env-ref env sym)))))))
 
 ;*******************************************************************************************
 ;Ambientes
@@ -511,11 +594,8 @@
 
 
 ;****************************************************************************************
-;Funciones Auxiliares
-
 ; funciones auxiliares para encontrar la posición de un símbolo
 ; en la lista de símbolos de unambiente
-
 (define list-find-position
   (lambda (sym los)
     (list-index (lambda (sym1) (eqv? sym1 sym)) los)))
@@ -531,7 +611,61 @@
                 #f))))))
 
 ;se define un ambiente inicial
-
 (define inicial-env
   (lambda ()
     (extend-env '(@a @b @c @d @e) '(1 2 3 "hola" "FLP") (empty-env))))
+
+;****************************************************************************************
+;Targets y referencias
+(define expval?
+  (lambda (x)
+    (or (or (number? x) (procval? x) ) list? x)
+  )
+)
+
+
+(define ref-to-direct-target?
+  (lambda (x)
+    (and (reference? x)
+         (cases reference x
+           (a-ref (pos vec)
+                  (cases target (vector-ref vec pos)
+                    (direct-target (v) #t)
+                    (indirect-target (v) #f)))))))
+
+(define primitive-deref
+  (lambda (ref)
+    (cases reference ref
+      (a-ref (pos vec)
+             (vector-ref vec pos)))))
+
+;funcion deref
+(define deref
+  (lambda (ref)
+    (cases target (primitive-deref ref)
+      (direct-target (expval) expval)
+      (indirect-target (ref-1)
+                       (cases target (primitive-deref ref-1)
+                         (direct-target (expval) expval)
+                         (indirect-target (p)
+                                          (eopl:error 'deref
+                                                      "Illegal reference: ~s" ref-1)))))))
+
+
+(define primitive-setref!
+  (lambda (ref val)
+    (cases reference ref
+      (a-ref (pos vec)
+             (vector-set! vec pos val)))))
+
+;funcion setref!
+(define setref!
+  (lambda (ref expval)
+    (let
+        ((ref (cases target (primitive-deref ref)
+                (direct-target (expval1) ref)
+                (indirect-target (ref-1) ref-1))))
+      (primitive-setref! ref (direct-target expval))
+    )
+  )
+)
