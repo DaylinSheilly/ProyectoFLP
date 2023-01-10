@@ -31,6 +31,8 @@
                 := "("<expression> <primitiva-para-numeros> <expression>")"
                 primapp-int-exp (exp1 prim-number exp2)
                 := <primitiva-sobre-cadenas> "("<expression>")"
+                primapp-un-exp (prim-unaria exp)
+                := <primitiva-sobre-cadenas> "("<expression>")"
                 primapp-str-exp (prim-str exp)
                 := "var" "{" <identificador> "=" <expression> "}"*(",") "in" <expression>
                 var-def-exp (ids exps cuerpo)
@@ -111,7 +113,7 @@
 '((white-sp (whitespace) skip)
   (comment ("#"(arbno (not #\newline))) skip)
   (texto ("'" (arbno (or letter digit whitespace)) "'") string)
-  (identificador("letter" (arbno (or letter digit "?")))symbol)
+  (identificador("@" (arbno (or letter digit "?")))symbol)
   ;enteros positivos y negativos
   (numero (digit (arbno digit)) number)
   (numero ("-" digit (arbno digit)) number)
@@ -132,6 +134,7 @@
     (expression (tupla) tupla-exp)
     (expression (registro) registro-exp)
     (expression (primitiva-sobre-cadenas "("expression")") primapp-str-exp)
+    (expression (primitiva-unaria "(" (separated-list expression ",") ")") primapp-un-exp)
     (expression ("("expression primitiva-para-numeros expression")") primapp-int-exp)
     (expression ("var""{"(separated-list identificador"="expression ",")"}") var-def-exp)
 
@@ -174,17 +177,15 @@
 
     (oper-un-bool ("not") negacion)
 
+    (expression ("declaracion-rec" (arbno identificador "(" (separated-list identificador ",") ")" "=" expression) "{" expression "}") declaracion-rec)
+
+
     ;estructuras de control
-    (expression ("begin" {expression}(arbno ";" expression) "end") begin-exp) ;falta
+    ;(expression ("begin" {expression}(arbno ";" expression) "end") begin-exp) ;falta
+    (expresion ("begin" "{" expresion ";" (arbno expresion ";") "}" "end") begin-exp)
 
-    ;procedimiento
+    ;procedimientos
     (expression ("procedimiento" "("(separated-list identificador ",") ")" "haga" expression "finProc") procedimiento-exp)
-
-    ;invocación del procedimiento
-    ;(expression ("invocar-proc" expression "(" (separated-list expression ",") ")") procedimiento-inv-exp)
-
-    ;procedimiento recursivo
-    ;(expression ("proc-recursivo" (arbno identificador "(" (separated-list identificador ",") ")" "=" expression)  "in" expression)  proc-recursivo-exp)
 
    )
 )
@@ -291,17 +292,22 @@
       (numero-lit (num) num)
       (texto-lit (txt) txt)
       (var-exp (id) (buscar-variable env id)) ;por aqui entra
+      (primapp-un-exp (prim-unaria exp)
+                      (apply-un-primitive prim-unaria exp env))
+      (primapp-bin-exp (exp1 prim-binaria exp2)
+                       (apply-bin-primitive exp1 prim-binaria exp2 env))
       (condicional-exp (test-exp true-exp false-exp)
                        (if(true-value? (eval-expression test-exp env))
                           (eval-expression true-exp env)
                           (eval-expression false-exp env)
                         ))
-      (set-exp (id rhs-exp)
+      #|(set-exp (id rhs-exp)
                (begin-exp
                  (primitive-setref!
                   (apply-env-ref env id)
                   (eval-expresion rhs-exp env))
                  1))
+      |#
       (variableLocal-exp (ids exps cuerpo)
                (let ((args (eval-rands exps env)))
                  (eval-expression cuerpo
@@ -317,8 +323,19 @@
       (tupla-exp (tupla) (eval-tupla tupla))
       (registro-exp (registro) (eval-registro registro))
 
+      (declaracion-rec (proc-names idss bodies letrec-body)
+                  (eval-expression letrec-body
+                                   (extend-env-recursively proc-names idss bodies env)))
+
       ;estructuras de control
-      (begin-exp (exp exps) 0) ;falta
+      (begin-exp (exp exps)
+                 (let loop ((acc (eval-expression exp env))
+                             (exps exps))
+                    (if (null? exps)
+                        acc
+                        (loop (eval-expression (car exps)
+                                               env)
+                              (cdr exps))))) ;falta
       (condicional-exp (test-exp true-exp false-exp)
                        (if(true-value? (eval-expression test-exp env))
                           (eval-expression true-exp env)
@@ -379,7 +396,7 @@
       (registro-exp (registro) (eval-expression exp))
       (else #t))))
 
-
+#|
 (define eval-expr-bool
   (lambda (expr-bool env)
     (cases expression expr-bool
@@ -392,6 +409,7 @@
       |#
       (else #t)
       )))
+|#
 
 ; lista de operandos (expresiones)
 (define eval-rands
@@ -546,19 +564,6 @@
                                  (apply-env-ref env sym)))))))
 
 
-;funcion auxiliar que crea un ambiente extendido para los procedimientos recursivos.
-(define extend-env-recursivo
-  (lambda (nombre-proc idfs bodys env-viejo)
-    (let ((len (length nombre-proc)))
-      (let ((vec (make-vector len)))
-        (let ((env (extended-env-record (map (lambda (id) (mutable id))nombre-proc) vec env-viejo)))
-          (for-each
-            (lambda (pos ids body)
-              (vector-set! vec pos (closure ids body env))
-            )
-            (iota len) idfs bodys
-          )
-          env)))))
 
 
 ;****************************************************************************************
@@ -645,5 +650,3 @@
     )
   )
 )
-
-
