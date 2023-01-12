@@ -8,11 +8,105 @@
     Sheilly Ortega - 2040051
     Link del repositorio: https://github.com/DaylinSheilly/ProyectoFLP.git
 |#
+#|
+    La definición BNF para las expressiones del lenguaje:
+    <programa> :=  <expression> 
+               un-programa (exp)
+    <expression>:= <numero>
+                numero-lit (num)
+                := <identificador>
+                id-exp (id)
+                := "'"<texto>"'"
+                texto-lit (txt)
+                := "False"
+                falso ()
+                := "True"
+                verdadero ()
+                ("evaluar" <expression> "(" (<expression>)*(,) ")" "finEval")
+                app-exp (exp args)
+                := "var" "{" <identificador> "=" <expression> "}"*(",") "in" <expression>
+                var-def-exp (ids exps cuerpo)
+                := "const" "{" <identificador> "=" <expression> "}"*(",") "in" <expression>
+                const-def-exp (ids exps cuerpo)
+                := "rec" "{" <identificador> "(" "{"<identificador>"}"*(",") ")" "=" <expression> "}"*(",")
+                "in" <expression>
+                rec-def-exp (funcs ids cuerpof cuerpo)
+                := "[" "{" <expression> "}"*(";") "]"
+                lista (elems)
+                := "[" "{" <expression> "," <expression> "}"*(";") "]"
+                tupla (elems1, elems2)
+                := "{" "{" <identificador> "=" <expression> "}"+(";") "}"
+                registro (ids exps)
+                := "begin" "{"<expression>"}"+(";") "fin"
+                := "if" <expr-bool> "hacer" "{"<expression>"}" "else" "{"<expression>"}" "fin"
+                condicional-exp (test-exp true-exp false-exp)
+                := "mientras" <expr-bool> "hacer" "{"<expression>"}" "fin"
+                while-exp (test-exp cuerpo)
+                := "for" "{"<identificador> "=" <expression> "hasta" <expression>"}" "hacer" "{"<expression>"}" "fin"
+                for-exp (id valorInicial limite cuerpo)
+                := "definir" <identificador> "=" <expression>
+                definir-exp (id exp)
+                := <primitiva> "(" (<expression>)*(",") ")"
+                prim-exp (prim exps)
+                := <exp-bool>
+                bool-exp (exp-bool)
+                := primitiva "(" (<expression>)*(",") ")"
+                prim-exp (prim exps)
+                := <primitiva-hexa> "{" (<hexadecimal>)*"," ")"<expression>")"
+                prim-hexa-exp (prim hexa)
+                := "precedimiento" "(" (<identificador>)*(",") ")" "haga" <expression> "finProc"
+                procedimiento-exp (ids exp)
+
+       exp-bool := <pred-prim> "(" <expression> "," <expression> ")"
+                pred-prim-exp (prim exp1 exp2)
+                := <oper-bin-bool> "(" <exp-bool> "," <exp-bool> ")"
+                oper-bin-bool-exp (prim exp exp1)
+                := <oper-un-bool> "(" <exp-bool> ")"
+                oper-un-bool-exp (prim exp)
+    <pred-prim> := "<" | ">" | "<=" | ">=" | "==" | "<>"
+<oper-bin-bool> := "and" | "or"
+ <oper-un-bool> := "not"
+
+    <primitiva> := "+" (primitiva-suma)
+                := "~" (primitiva-resta)
+                := "*" (primitiva-multi)
+                := "%" (primitiva-mod)
+                := "/" (primitiva-div)
+                := "add1" (primitiva-add1)
+                := "sub1" (primitiva-sub1)
+                := "longitud" (primitiva-longitud)
+                := "concat" (primitiva-concat)
+                := "lista?" (primitiva-lista?)
+                := "lista" (primitiva-crear-lista)
+                := "append" (primitiva-append)
+                := "ref-list" (primitiva-ref-lista)
+                := "set-list" (primitiva-set-lista)
+                := "cabeza-lista" (primitiva-cabeza-lista)
+                := "cola-lista" (primitiva-cola-listaa)
+                := "tupla?" (primitiva-tupla?)
+                := "crear-tupla" (primitiva-crear-tupla)
+                := "ref-tupla" (primitiva-ref-tupla)
+                := "cabeza-tupla" (primitiva-cabeza-tupla)
+                := "cola-tupla" (primitiva-cola-tupla)
+                := "vacio" (primitiva-vacio)
+                := "vacio?" (primitiva-vacio?)
+                := "registro?" (primitiva-registro?)
+                := "crear-registro" (primitiva-crear-registro)
+                := "ref-registro" (primitiva-ref-registro)
+                := "set-registro" (primitiva-set-registro)
+                := "suma" (suma-hexa)
+                := "resta" (resta-hexa)
+                := "multi" (multi-hexa)
+                := "*hadd1" (add1-hexa)
+                := "*hsub1" (sub1-hexa)
+|#
 
 ;Especificación Léxica
+
 (define scanner-spec-simple-interpreter
 '((white-sp (whitespace) skip)
   (comment ("#"(arbno (not #\newline))) skip)
+  (caracter ("/" letter "/") string)
   (texto ("'" (arbno (or letter digit whitespace "\"" "-" ":" "." "," ";" "!" "¡" "¿" "?" "(" ")")) "'") string)
   (identificador ( letter (arbno (or letter digit))) symbol)
   ;enteros positivos y negativos
@@ -21,7 +115,13 @@
   ;flotantes
   (numero (digit (arbno digit) "." digit (arbno digit)) number)
   (numero ("-" digit (arbno digit) "." digit (arbno digit)) number)
-  )
+  ;Octales
+  (octal("*o(" (or "0" "1" "2" "3" "4" "5" "6" "7")
+        (arbno (or "0" "1" "2" "3" "4" "5" "6" "7"))) string)
+  ;Hecadecimales
+  (hexadecimal("*h" (or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" "a" "b" "c" "d" "e" "f")
+              (arbno(or "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" "a" "b" "c" "d" "e" "f"))) string)
+ )
 )
 
 ;Especificación Sintáctica (gramática)
@@ -37,13 +137,33 @@
   (expression ("False") falso) 
   (expression ("True") verdadero) 
   
+  ;definiciones
+  (expression ("var" "{" (arbno identificador "=" expression ";") "}" "in" expression) var-exp)
+  (expression ("const" "{" (arbno identificador "=" expression ";") "}" "in" expression) const-exp)
+  (expression ("rec" (arbno identificador "(" (separated-list identificador ",") ")" "=" expression )  "in" expression) rec-exp)
+
   ;constructores de datos predefinidos
   (expression ("[" (separated-list expression ",") "]") lista) 
   (expression ("tupla" "[" (separated-list expression ",") "]") tupla) 
   (expression ("{" "{"identificador "=" expression "}"";" (arbno "{"identificador "=" expression "}"";") "}") registro) 
 
+  ;estructuras de control
+  (expression ("begin" "{" expression ";" (arbno expression ";") "}" "fin") begin-exp)
+  (expression ("if" exp-bool "hacer" "{" expression "}" "else" "{" expression "}" "fin") condicional-exp)
+  (expression ("declarar" "(" (separated-list identificador "=" expression ";") ")" "hacer" "{" expression "}") variableLocal-exp)
+  (expression ("mientrar" exp-bool "hacer" "{" expression "}" "fin" ) while-exp)
+  (expression ("for" "(" identificador "=" expression "hasta" expression ")" "hacer" "{" expression "}" "fin") for-exp)
+  
+  (expression ("definir" identificador "=" expression) definir-exp)
+    
   ;expresiones booleanas
   (expression (exp-bool) bool-exp)
+
+  ;expresiones octales y hexadecimales
+  (expression (octal) octal-exp)
+  (expression (hexadecimal) hexa-exp)
+  (expression (primitiva-hexa "{" (separated-list hexadecimal ",") "}") prim-hexa-exp)
+
   (exp-bool (pred-prim "("expression "," expression")") pred-prim-exp)
   (exp-bool (oper-bin-bool "(" exp-bool "," exp-bool ")") oper-bin-bool-exp)
   (exp-bool (oper-un-bool "(" exp-bool ")") oper-un-bool-exp)
@@ -101,6 +221,12 @@
   (primitiva ("crear-registro") primitiva-crear-registro)
   (primitiva ("ref-registro") primitiva-ref-registro)
   (primitiva ("set-registro") primitiva-set-registro)
+
+  (primitiva-hexa ("suma") suma-hexa)
+  (primitiva-hexa ("resta") resta-hexa)
+  (primitiva-hexa ("multi") multi-hexa)
+  (primitiva-hexa ("*hadd1") add1-hexa)
+  (primitiva-hexa ("*hsub1") sub1-hexa)
 )
 )
 
@@ -224,8 +350,82 @@
     (registro (id exp list-id list-exp) (let ((args (eval-prim-exp-rands list-exp env))
                                               (arg (eval-expression exp env)))
                                         (apply-registro id arg list-id args )))
+    (condicional-exp (exp-bool true-exp false-exp)
+                       (if (eval-exp-bool exp-bool env)
+                           (eval-expression true-exp env)
+                           (eval-expression false-exp env)))
 
-   (bool-exp (exp) (eval-exp-bool exp env)))))
+      (rec-exp (proc-names idss bodies letrec-body)
+                  (eval-expression letrec-body
+                                   (extend-env-recursively proc-names idss bodies env)))
+      (app-exp (exp exps)
+               (let ((proc (eval-expression exp env))
+                     (args (eval-rands exps env)))
+                 (if (procval? proc)
+                     (apply-procedure proc args)
+                     (eopl:error 'eval-expression "Attempt to apply non-procedure ~s" proc))))
+      
+      (var-exp (ids exps cuerpo)
+               (let ((args (eval-let-exp-rands exps env)))
+                    (eval-expression cuerpo (extend-env ids args env))))
+
+      (const-exp (ids rands body)
+                 (begin 
+                   (eval-set rands)
+                   (cases expression body
+                     (definir-exp (id exp) (eopl:error 'evaluar-expression
+                                              "No es posible modificar una constante"))
+                     (else (let ((args (eval-let-exp-rands rands env)))
+                             (eval-expression body (extend-env ids args env)))))))
+
+      (definir-exp (id rhs-exp)
+               (begin
+                 (setref!
+                  (apply-env-ref env id)
+                  (eval-expression rhs-exp env))1))
+      
+      (begin-exp (exp exps) 
+                 (let loop ((acc (eval-expression exp env)) (exps exps))
+                    (if (null? exps) 
+                        acc
+                        (loop (eval-expression (car exps) env) (cdr exps)))))
+
+      (while-exp (exp-bool exp)
+                  (let   loop ((i 0))
+                 
+                   (when (eval-exp-bool exp-bool env)
+                      (eval-expression exp env)
+                      (loop (+ 1 i)))))
+      
+      (variableLocal-exp (ids exps cuerpo)
+               (let ((args (eval-rands exps env)))
+                 (eval-expression cuerpo (extend-env ids args env))))
+      
+      (for-exp ( exp desde hasta cuerpo)
+         (let
+             ((de (eval-expression desde env))
+                   (to (eval-expression hasta env)))
+            (let   loop ((i de))
+                   (when (< i to)
+                      (eval-expression cuerpo (extend-env (list exp) (list i) env))
+                      (loop (+ 1 i))))))
+
+    (bool-exp (exp) (eval-exp-bool exp env)))))
+      
+     ;hexadecimales
+      (octal-exp (octal) octal)
+      (hexa-exp (hexa) hexa)
+      (prim-hexa-exp (prim hexa) (cases primitiva-hexa prim
+                                 (suma-hexa () (number->string (+ (string->number (string-append "#x"(substring (car hexa) 2)) 16)
+                                                                  (string->number (string-append "#x"(substring (cadr hexa) 2)) 16)) 16))
+                                 (resta-hexa () (number->string (- (string->number (string-append "#x"(substring (car hexa) 2)) 16)
+                                                                  (string->number (string-append "#x"(substring (cadr hexa) 2)) 16)) 16))
+                                 (multi-hexa () (number->string (* (string->number (string-append "#x"(substring (car hexa) 2)) 16)
+                                                                  (string->number (string-append "#x"(substring (cadr hexa) 2)) 16)) 16))
+                                 (add1-hexa () (number->string (+ (string->number (string-append "#x"(substring (car hexa) 2)) 16) 1) 16))
+                                 (sub1-hexa () (number->string (- (string->number (string-append "#x"(substring (car hexa) 2)) 16) 1) 16))
+                                 )
+      )
   
 ;funciones auxiliares
 
