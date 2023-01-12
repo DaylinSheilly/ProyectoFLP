@@ -1,0 +1,282 @@
+#lang eopl
+#|
+    Integrantes:
+    César Alejandro Grijalba Zúñiga - 202110035
+    Johan Sebastian Tombe - 202110051
+    Laura Murillas Andrade - 1944153
+    Juan Esteban Mazuera - 2043008
+    Sheilly Ortega - 2040051
+    Link del repositorio: https://github.com/DaylinSheilly/ProyectoFLP.git
+|#
+
+;Especificación Léxica
+(define scanner-spec-simple-interpreter
+'((white-sp (whitespace) skip)
+  (comment ("#"(arbno (not #\newline))) skip)
+  (texto ("'" (arbno (or letter digit whitespace "\"" "-" ":" "." "," ";" "!" "¡" "¿" "?" "(" ")")) "'") string)
+  (identificador ( letter (arbno (or letter digit))) symbol)
+  ;enteros positivos y negativos
+  (numero (digit (arbno digit)) number)
+  (numero ("-" digit (arbno digit)) number)
+  ;flotantes
+  (numero (digit (arbno digit) "." digit (arbno digit)) number)
+  (numero ("-" digit (arbno digit) "." digit (arbno digit)) number)
+  )
+)
+
+;Especificación Sintáctica (gramática)
+
+(define grammar-simple-interpreter
+'(
+  ;Programa
+  (programa (expression) un-programa)
+
+  ;datos
+  (expression (numero) numero-lit) 
+  (expression (identificador) id-exp) 
+  (expression (texto) texto-lit) 
+  (expression ("False") falso) 
+  (expression ("True") verdadero) 
+  
+  ;constructores de datos predefinidos
+  (expression ("[" (separated-list expression ",") "]") lista) 
+  (expression ("tupla" "[" (separated-list expression ",") "]") tupla) 
+  (expression ("{" "{"identificador "=" expression "}"";" (arbno "{"identificador "=" expression "}"";") "}") registro) 
+  
+  (expression (exp-bool) bool-exp)
+
+  ;expresiones booleanas
+  (exp-bool (pred-prim "("expression "," expression")") pred-prim-exp)
+  (exp-bool (oper-bin-bool "(" exp-bool "," exp-bool ")") oper-bin-bool-exp)
+  (exp-bool (oper-un-bool "(" exp-bool ")") oper-un-bool-exp)
+
+  (pred-prim ("<") menorQue)
+  (pred-prim (">") mayorQue)
+  (pred-prim ("<=") menorOigualQue)
+  (pred-prim (">=") mayorOigualQue)
+  (pred-prim ("==") igual)
+  (pred-prim ("<>") diferente)
+
+  (oper-bin-bool ("and") boolAnd)
+  (oper-bin-bool ("or") boolOr)
+
+  (oper-un-bool ("not") boolNot) 
+)
+)
+
+
+;*******************************************************************************************
+;Tipos de datos para la sintaxis abstracta de la gramática construidos automáticamente:
+
+(sllgen:make-define-datatypes scanner-spec-simple-interpreter grammar-simple-interpreter)
+
+(define show-the-datatypes
+  (lambda ()
+    (sllgen:list-define-datatypes scanner-spec-simple-interpreter grammar-simple-interpreter)
+  )
+)
+
+;*******************************************************************************************
+;Parser, Scanner, Interfaz
+
+;El FrontEnd (Análisis léxico (scanner) y sintáctico (parser) integrados)
+
+(define scan&parse
+  (sllgen:make-string-parser scanner-spec-simple-interpreter grammar-simple-interpreter)
+)
+
+;El Analizador Léxico (Scanner)
+
+(define just-scan
+  (sllgen:make-string-scanner scanner-spec-simple-interpreter grammar-simple-interpreter)
+)
+
+;El Interpretador (FrontEnd + Evaluación + señal para lectura )
+
+(define interpretador
+  (sllgen:make-rep-loop  "--❤ "               
+    (lambda (pgm) (eval-programa  pgm))
+    (sllgen:make-stream-parser 
+      scanner-spec-simple-interpreter
+      grammar-simple-interpreter)
+   )
+ )
+
+;*******************************************************************************************
+;El Interprete
+
+;eval-programa: <programa> -> expression
+; función que evalúa un programa teniendo en cuenta un ambiente dado (se inicializa dentro del programa)
+
+(define eval-programa
+  (lambda (pgm)
+    (cases programa pgm
+      (un-programa (eval-expression exp (init-env))
+      )
+    )
+  )
+)
+; Ambiente inicial
+(define init-env
+(lambda ()
+  (extend-env
+    '(@a @b @c @d @e)
+    (list 1 2 3 "Hola" "FLP")
+    (empty-env)
+  )
+)
+)
+
+;eval-expression: <expression> <enviroment> ->  
+; evalua la expresión en el ambiente de entrada, para cada caso (numero-lit,var-exp,texto-lit, condicional-exp, variableLocal-exp
+;procedimiento-exp, app-exp, letrec, primapp-bin-exp, primapp-un-exp) devuelve algo diferente dependiendo del caso de la expresión.
+(define eval-expression
+(lambda (exp env)
+  (cases expression exp
+    (numero-lit (numero) numero)
+    (id-exp (id)(apply-env env id))
+    (texto-lit (txt) (txt env))
+    (verdadero () #t)
+    (falso () #f)
+
+    (lista (exp) (let ((args (eval-prim-exp-rands exp env)))
+                     (if (not (null? args))
+                         (apply-lista (list->vector args))
+                         '())))
+
+    (tupla (exp) (let ((args (eval-prim-exp-rands exp env)))
+                   (if (not (null? args)) 
+                       (list (car args) (cadr args))'())))
+
+    (registro (id exp list-id list-exp) (let ((args (eval-prim-exp-rands list-exp env))
+                                              (arg (eval-expression exp env)))
+                                        (apply-registro id arg list-id args )))
+
+   (bool-exp (exp) (eval-exp-bool exp env)))))
+  
+;funciones auxiliares
+
+;asi se crea una lista
+(define apply-lista
+(lambda (exp)
+   exp))
+
+;asi se crea un registro
+(define apply-registro
+(lambda (id arg list-id args)
+  (list (list->vector (cons id list-id)) (list->vector (cons arg args)))))
+
+; funciones auxiliares para aplicar eval-expression a cada elemento de una 
+; lista de operandos (expressiones)
+
+(define eval-prim-exp-rands
+(lambda (rands env)
+  (map (lambda (x) (eval-expression x env)) rands)))
+
+;booleanos
+
+;función auxiliar para evaluar expresiones booleanas
+(define eval-exp-bool
+(lambda (exp env)
+  (cases exp-bool exp 
+    (pred-prim-exp (pred-prim exp1 exp2) (apply-pred-prim pred-prim exp1 exp2 env))
+    (oper-bin-bool-exp (pred-bin-prim exp1 exp2) (apply-oper-bin-bool pred-bin-prim (eval-exp-bool exp1 env) (eval-exp-bool exp2 env) env))
+    (oper-un-bool-exp (pred-un-prim exp) (apply-oper-un-bool pred-un-prim (eval-exp-bool exp env) env)))))
+
+;funcion auxiliar para evaluar una expresion pred-prim
+(define apply-pred-prim
+(lambda (pred-prim-expr exp1 exp2 env)
+  (cases pred-prim pred-prim-expr
+    (menorQue () (< (eval-expression exp1 env) (eval-expression exp2 env)))
+    (mayorQue () (> (eval-expression exp1 env) (eval-expression exp2 env)))
+    (menorOigualQue () (<= (eval-expression exp1 env) (eval-expression exp2 env)))
+    (mayorOigualQue () (>= (eval-expression exp1 env) (eval-expression exp2 env)))
+    (igual () (= (eval-expression exp1 env) (eval-expression exp2 env)))
+    (diferente () (not (= (eval-expression exp1 env) (eval-expression exp2 env)))))))
+
+;funcion auxiliar para evaluar una expresion oper-bin-bool
+(define apply-oper-bin-bool
+(lambda (oper-bin-bool-exp exp1 exp2 env)
+  (cases oper-bin-bool oper-bin-bool-exp
+    (boolAnd () (and exp1 exp2))
+    (boolOr () (or exp1 exp2)))))
+
+;funcion auxiliar para evaluar una expresion oper-un-bool
+(define apply-oper-un-bool
+(lambda (oper-un-bool-exp expr-bool env)
+  (cases oper-un-bool oper-un-bool-exp
+    (boolNot () (not expr-bool)))))
+
+  ;*******************************************************************************************
+;Ambientes
+
+;definición del tipo de dato ambiente
+(define-datatype environment environment?
+(empty-env-record)
+(extended-env-record
+ (syms (list-of symbol?))
+ (vec vector?)
+ (env environment?)))
+
+(define scheme-value? (lambda (v) #t))
+
+;empty-env:      -> enviroment
+;función que crea un ambiente vacío
+(define empty-env  
+(lambda ()
+  (empty-env-record)))       ;llamado al constructor de ambiente vacío 
+
+;extend-env: <list-of symbols> <list-of numbers> enviroment -> enviroment
+;función que crea un ambiente extendido
+(define extend-env
+(lambda (syms vals env)
+  (extended-env-record syms (list->vector vals) env)))
+
+;función que busca un símbolo en un ambiente
+(define apply-env
+(lambda (env sym)
+    (deref (apply-env-ref env sym))))
+
+;****************************************************************************************
+; funciones auxiliares para encontrar la posición de un símbolo
+; en la lista de símbolos de un ambiente
+
+(define rib-find-position 
+(lambda (sym los)
+  (list-find-position sym los)))
+
+(define list-find-position
+(lambda (sym los)
+  (list-index (lambda (sym1) (eqv? sym1 sym)) los)))
+
+(define list-index
+(lambda (pred ls)
+  (cond
+    ((null? ls) #f)
+    ((pred (car ls)) 0)
+    (else (let ((list-index-r (list-index pred (cdr ls))))
+            (if (number? list-index-r)
+              (+ list-index-r 1)
+              #f))))))
+
+;ejemplos
+
+;datos
+;enteros positivos y negativos: (scan&parse "123") | (scan&parse "123")
+;flotantes: (scan&parse "-1.23") | (scan&parse "-1.23")
+;octales:
+;hexadecimales:
+;identificador: (scan&parse "id")
+;texto: (scan&parse "'escribir usando comillas simples hola'")
+;falso: (scan&parse "False")
+;verdadero: (scan&parse "True")
+
+;constructores de datos predefinidos
+;lista: (scan&parse "[1,2,3]")
+;tupla: (scan&parse "tupla[1,2,3]")
+;registro: (scan&parse "{{a=1};{b=2};{c=3};}")
+
+;expresiones booleanas
+;pred-prim: <(1,2)
+;oper-bin-bool: and(<(1,2),<(3,19))
+;oper-un-bool: not(>(1,2))
