@@ -301,7 +301,9 @@
 (define eval-programa
   (lambda (pgm)
     (cases programa pgm
-      (un-programa (eval-expression exp (init-env))
+      (un-programa (c-decls exp)
+                 (elaborate-class-decls! c-decls)
+                 (eval-expression exp (init-env))
       )
     )
   )
