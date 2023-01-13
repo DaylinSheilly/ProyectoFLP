@@ -130,6 +130,31 @@
   ;Programa
   (programa (expression) un-programa)
 
+  ;declracion de la clase
+    (class-decl                         
+      ("class" identificador
+        "extends" identificador                  
+         (arbno "field" identificador)
+         (arbno method-decl)
+         )
+      a-class-decl)
+
+  ;declaracion del metodo
+    (method-decl
+      ("method" identificador 
+      "("  (separated-list identificador ",") ")" ; method ids
+        expression 
+        )
+      a-method-decl)
+
+  ;expresiones para los objetos
+  (expression ("new" identificador "(" (separated-list expression ",") ")") new-object-exp)
+
+  (expression ("send" expression identificador "(" (separated-list expression ",") ")") method-app-exp)
+  
+  (expression ("super" identificador    "("  (separated-list expression ",") ")") super-call-exp)
+    
+    
   ;datos
   (expression (numero) numero-lit) 
   (expression (identificador) id-exp) 
@@ -276,7 +301,9 @@
 (define eval-programa
   (lambda (pgm)
     (cases programa pgm
-      (un-programa (eval-expression exp (init-env))
+      (un-programa (c-decls exp)
+                 (elaborate-class-decls! c-decls)
+                 (eval-expression exp (init-env))
       )
     )
   )
